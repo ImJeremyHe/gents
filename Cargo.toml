@@ -2,11 +2,11 @@
 authors = ["ImJeremyHe<yiliang.he@qq.com>"]
 edition = "2018"
 name = "gents"
-version = "0.3.0"
+version = "0.3.1"
 license = "MIT"
 description = "generate typescript interfaces from rust code"
 repository = "https://github.com/proclml/LogiSheets/tree/master/crates/gents"
 keywords = ["typescript", "interface"]
 
 [dev-dependencies]
-gents_derives = {version = "0.3.0", path = "./derives"}
+gents_derives = {version = "0.3.1", path = "./derives"}
