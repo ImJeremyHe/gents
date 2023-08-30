@@ -34,10 +34,33 @@ pub enum Pet {
     None,
 }
 
+#[derive(TS)]
+#[ts(file_name = "skip.ts", rename_all = "camelCase")]
+pub struct TestSkip {
+    pub f1: u16,
+    #[ts(skip = true)]
+    pub f2: u32,
+    pub f3: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use gents::*;
+
+    #[test]
+    fn gen_skip_test() {
+        let mut manager = DescriptorManager::default();
+        TestSkip::_register(&mut manager);
+        let (_, content) = manager.gen_data().into_iter().next().unwrap();
+        assert_eq!(
+            content.trim(),
+            r#"export interface TestSkip {
+    f1: number
+    f3: number
+}"#
+        )
+    }
 
     #[test]
     fn gen_data_person_test() {
