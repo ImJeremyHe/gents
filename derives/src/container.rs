@@ -42,7 +42,7 @@ impl<'a> Contianer<'a> {
                     file_name = Some(s.value());
                 }
                 Meta(NameValue(m)) if m.path == RENAME => {
-                    let s = get_lit_str(&m.lit).expect("file_name requires lit str");
+                    let s = get_lit_str(&m.lit).expect("rename requires lit str");
                     rename = Some(s.value());
                 }
                 _ => panic!("unexpected attr"),
