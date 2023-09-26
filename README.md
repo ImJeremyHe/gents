@@ -38,8 +38,9 @@ In your **Rust** code:
 You should import `gents` in your Cargo.toml.
 
 ```toml
-gents = "0.3"
-gents_derives = "0.3"
+[dev-dependencies]
+gents = "0.4"
+gents_derives = "0.4"
 ```
 
 ```rust
@@ -62,12 +63,14 @@ pub struct Group {
 }
 ```
 
-And you should make a binary to generate the files like below:
+And then you can write a unit test to generate the files like below:
 
 ```rust
-use gents::FileGroup;
 
-fn main() {
+#[ignore]
+#[test]
+fn gents() {
+    use gents::FileGroup;
     let mut group = FileGroup::new();
     group.add::<Group>();
     // If you need to generate the index.ts file, set true.

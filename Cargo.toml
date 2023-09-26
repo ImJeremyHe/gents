@@ -2,11 +2,11 @@
 authors = ["ImJeremyHe<yiliang.he@qq.com>"]
 edition = "2018"
 name = "gents"
-version = "0.3.2"
+version = "0.4.0"
 license = "MIT"
 description = "generate typescript interfaces from rust code"
 repository = "https://github.com/ImJeremyHe/gents"
 keywords = ["Typescript", "interface", "ts-rs", "Rust"]
 
 [dev-dependencies]
-gents_derives = {version = "0.3.2", path = "./derives"}
+gents_derives = {version = "0.4.0", path = "./derives"}
