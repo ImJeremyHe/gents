@@ -29,7 +29,10 @@
 //! }
 //! ```
 //!
-//! ## Step3: Register your root structs or enums
+//! ## Step3: Register your root structs or enums.
+//! We recommend that you can write a unit test to do it. You can also write a binary for it but please run the binary with `--cfg=test`.
+//! The proc macro `TS` will generate the code under #[cfg(test)], which means these code can
+//! be run only in `test` environment and they will never influence your code.
 //! ```no_run
 //! use gents::FileGroup;
 //! use gents_derives::TS;
@@ -37,7 +40,9 @@
 //! #[ts(file_name = "person.ts")]
 //! pub struct Person{}
 //!
-//! fn main() {
+//! #[ignore]
+//! #[test]
+//! fn generate_ts_files() {
 //!     let mut g = FileGroup::new();
 //!     g.add::<Person>();
 //!     g.gen_files("outdir", false); // false for not generating index.ts
@@ -46,7 +51,7 @@
 //! `.add` adds the target and its dependencies into the `FileGroup` and their files
 //! will be generated in the same time.
 //!
-//! ## Step4: Run the binary
+//! ## Step4: Run the unit test
 //!
 
 mod descriptor;
