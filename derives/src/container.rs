@@ -8,7 +8,7 @@ use syn::Type;
 use crate::symbol::FILE_NAME;
 use crate::symbol::{RENAME, RENAME_ALL, SKIP, TS};
 
-pub struct Contianer<'a> {
+pub struct Container<'a> {
     pub file_name: String,
     pub is_enum: bool,
     pub fields: Vec<Field<'a>>,
@@ -17,7 +17,7 @@ pub struct Contianer<'a> {
     pub ident: &'a Ident,
 }
 
-impl<'a> Contianer<'a> {
+impl<'a> Container<'a> {
     pub fn from_ast(item: &'a syn::DeriveInput) -> Self {
         let mut rename_all: Option<RenameAll> = None;
         let mut file_name: Option<String> = None;
@@ -55,7 +55,7 @@ impl<'a> Contianer<'a> {
                     .iter()
                     .map(|f| Field::from_field(f))
                     .collect::<Vec<_>>();
-                Contianer {
+                Container {
                     file_name: file_name.expect("file name are required"),
                     is_enum: false,
                     fields,
@@ -70,7 +70,7 @@ impl<'a> Contianer<'a> {
                     .iter()
                     .map(|v| Field::from_variant(v))
                     .collect::<Vec<_>>();
-                Contianer {
+                Container {
                     file_name: file_name.unwrap(),
                     is_enum: true,
                     fields,
