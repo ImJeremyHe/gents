@@ -104,7 +104,7 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
         }
     };
     quote! {
-        #[cfg(test)]
+        #[cfg(any(test, feature="gents"))]
         impl ::gents::TS for #ident {
             #register_func
             #ts_name_func
