@@ -4,7 +4,7 @@ mod case;
 mod container;
 mod symbol;
 
-use container::{Contianer, RenameAll};
+use container::{Container, RenameAll};
 use proc_macro::TokenStream;
 use quote::quote;
 
@@ -15,7 +15,7 @@ pub fn derive_ts(input: TokenStream) -> TokenStream {
 }
 
 fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
-    let container = Contianer::from_ast(&input);
+    let container = Container::from_ast(&input);
     let file_name = container.file_name;
     let is_enum = container.is_enum;
     let rename_all = container.rename_all;
