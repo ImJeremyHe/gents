@@ -33,7 +33,7 @@ impl<'a> Container<'a> {
                     let s = get_lit_str(&m.lit).expect("rename_all requires lit str");
                     let t = match s.value().as_str() {
                         "camelCase" => RenameAll::CamelCase,
-                        _ => panic!(""),
+                        _ => panic!("unexpected literal for case converting"),
                     };
                     rename_all = Some(t);
                 }
@@ -79,7 +79,7 @@ impl<'a> Container<'a> {
                     rename,
                 }
             }
-            _ => panic!("Not support the union type"),
+            _ => panic!("gents does not support the union type currently, use struct instead"),
         }
     }
 }
