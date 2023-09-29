@@ -4,9 +4,9 @@ edition = "2018"
 name = "gents"
 version = "0.4.1"
 license = "MIT"
-description = "generate typescript interfaces from rust code"
+description = "generate Typescript interfaces from Rust code"
 repository = "https://github.com/ImJeremyHe/gents"
-keywords = ["Typescript", "interface", "ts-rs", "Rust"]
+keywords = ["Typescript", "interface", "ts-rs", "Rust", "wasm"]
 
 [dev-dependencies]
 gents_derives = {version = "0.4.0", path = "./derives"}

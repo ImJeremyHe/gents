@@ -5,8 +5,11 @@ use std::{
 
 use crate::utils::remove_ext;
 
+// `TS` trait defines the behavior of your types when generating files.
+// `TS` generates some helper functions for file generator.
 pub trait TS {
     fn _register(manager: &mut DescriptorManager) -> usize;
+    // The name of this Rust type in Typescript.
     fn _ts_name() -> String;
     fn _is_optional() -> bool {
         false
@@ -129,6 +132,8 @@ impl DescriptorManager {
     }
 }
 
+// todo: InterfaceDescriptor and EnumDescriptor are the same now.
+// Remove one of it.
 #[derive(Debug)]
 pub enum Descriptor {
     Interface(InterfaceDescriptor),
