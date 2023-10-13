@@ -126,4 +126,36 @@ export interface Group {
     | 'None'"#
         );
     }
+
+    #[test]
+    fn gen_with_comments_test() {
+        /// This is a doc comment.
+        /// Another Comment
+        /**
+        Block Comment
+        */
+        #[derive(TS)]
+        #[ts(file_name = "struct_with_comments.ts", rename_all = "camelCase")]
+        pub struct StructWithComments {
+            /// field comment1
+            /// field comment2
+            pub field_with_comment: u32,
+        }
+
+        let mut manager = DescriptorManager::default();
+        StructWithComments::_register(&mut manager);
+        let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
+        assert_eq!(file_name, "struct_with_comments.ts");
+        assert_eq!(
+            content.trim(),
+            r#"// This is a doc comment.
+// Another Comment
+// Block Comment
+export interface StructWithComments {
+    // field comment1
+    // field comment2
+    fieldWithComment: number
+}"#
+        );
+    }
 }

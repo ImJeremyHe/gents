@@ -62,6 +62,8 @@ impl DescriptorManager {
                     }
                     result
                 };
+                let comments = get_comment_string(&d.comments, false);
+
                 let fields_strings = d.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
                     let optional = if fd.optional {
                         String::from(" | null")
@@ -70,14 +72,16 @@ impl DescriptorManager {
                     };
                     let ident = fd.ident.to_string();
                     let ty = fd.ts_ty.to_string();
-                    let f = format!("    {}: {}{}", ident, ty, optional);
+                    let c = get_comment_string(&fd.comments, true);
+                    let f = format!("{}    {}: {}{}", c, ident, ty, optional);
                     prev.push(f);
                     prev
                 });
                 let fields_string = fields_strings.join("\n");
                 let content = format!(
-                    "{}\nexport interface {} {{\n{}\n}}\n",
+                    "{}\n{}export interface {} {{\n{}\n}}\n",
                     import_string,
+                    comments,
                     d.ts_name.to_string(),
                     fields_string
                 );
@@ -106,6 +110,8 @@ impl DescriptorManager {
                     }
                     result
                 };
+                let comments = get_comment_string(&e.comments, false);
+
                 let fields_strings = e.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
                     let ident = fd.ident.to_string();
                     let ty = fd.ts_ty.to_string();
@@ -121,14 +127,26 @@ impl DescriptorManager {
                 let fields_string = fields_strings.join("\n    ");
                 let ts_name = e.ts_name.to_string();
                 let content = format!(
-                    "{}\nexport type {} =\n    {}\n",
-                    import_string, ts_name, fields_string
+                    "{}\n{}export type {} =\n    {}\n",
+                    import_string, comments, ts_name, fields_string
                 );
                 result.push((e.file_name.to_string(), content))
             }
             _ => {}
         });
         result
+    }
+}
+
+fn get_comment_string(v: &[String], indent: bool) -> String {
+    if v.is_empty() {
+        String::from("")
+    } else {
+        if !indent {
+            format!("// {}\n", v.join("\n// "))
+        } else {
+            format!("    // {}\n", v.join("\n    // "))
+        }
     }
 }
 
@@ -160,6 +178,7 @@ pub struct EnumDescriptor {
     pub fields: Vec<FieldDescriptor>,
     pub file_name: String,
     pub ts_name: String,
+    pub comments: Vec<String>,
 }
 
 /// Describe how to generate a ts interface.
@@ -170,6 +189,7 @@ pub struct InterfaceDescriptor {
     pub fields: Vec<FieldDescriptor>,
     pub file_name: String,
     pub ts_name: String,
+    pub comments: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -177,6 +197,7 @@ pub struct FieldDescriptor {
     pub ident: String,
     pub optional: bool,
     pub ts_ty: String,
+    pub comments: Vec<String>,
 }
 
 macro_rules! impl_builtin {

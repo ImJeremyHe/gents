@@ -26,11 +26,13 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
         Some(s) => s,
         None => ident.to_string(),
     };
+    let comments = container.comments;
     let register_func = {
         let field_ds = fields.into_iter().filter(|f| !f.skip).map(|s| {
             let fi = s.ident;
             let rename = s.rename;
             let ty = s.ty;
+            let field_comments = s.comments;
             let name = match (rename, &rename_all) {
                 (None, None) => fi.to_string(),
                 (None, Some(RenameAll::CamelCase)) => {
@@ -51,6 +53,7 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
                         ident: #name.to_string(),
                         optional: <#ty as ::gents::TS>::_is_optional(),
                         ts_ty: <#ty as ::gents::TS>::_ts_name(),
+                        comments: vec![#(#field_comments.to_string()),*],
                     };
                     fields.push(fd);
                 }
@@ -60,6 +63,7 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
                         ident: #name.to_string(),
                         optional: false,
                         ts_ty: String::from(""),
+                        comments: vec![#(#field_comments.to_string()),*],
                     };
                     fields.push(fd);
                 }
@@ -72,6 +76,7 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
                     fields,
                     file_name: #file_name.to_string(),
                     ts_name: #ts_name.to_string(),
+                    comments: vec![#(#comments.to_string()),*],
                 };
                 let descriptor = ::gents::Descriptor::Enum(_enum);
             }
@@ -83,6 +88,7 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
                     fields,
                     file_name: #file_name.to_string(),
                     ts_name: #ts_name.to_string(),
+                    comments: vec![#(#comments.to_string()),*],
                 };
                 let descriptor = ::gents::Descriptor::Interface(_interface);
             }

@@ -15,6 +15,7 @@ pub struct Container<'a> {
     pub rename_all: Option<RenameAll>,
     pub rename: Option<String>,
     pub ident: &'a Ident,
+    pub comments: Vec<String>,
 }
 
 impl<'a> Container<'a> {
@@ -22,6 +23,7 @@ impl<'a> Container<'a> {
         let mut rename_all: Option<RenameAll> = None;
         let mut file_name: Option<String> = None;
         let mut rename: Option<String> = None;
+        let comments = parse_comments(&item.attrs);
         for meta_item in item
             .attrs
             .iter()
@@ -62,6 +64,7 @@ impl<'a> Container<'a> {
                     rename_all,
                     ident: &item.ident,
                     rename,
+                    comments,
                 }
             }
             syn::Data::Enum(e) => {
@@ -77,6 +80,7 @@ impl<'a> Container<'a> {
                     rename_all,
                     ident: &item.ident,
                     rename,
+                    comments,
                 }
             }
             _ => panic!("gents does not support the union type currently, use struct instead"),
@@ -89,20 +93,24 @@ pub struct Field<'a> {
     pub ident: &'a Ident,
     pub ty: Option<&'a Type>, // enum ty can be None.
     pub skip: bool,
+    pub comments: Vec<String>,
 }
 
 impl<'a> Field<'a> {
     pub fn from_field(f: &'a syn::Field) -> Self {
+        let comments = parse_comments(&f.attrs);
         let attrs = parse_attrs(&f.attrs);
         Field {
             rename: attrs.rename,
             ident: f.ident.as_ref().unwrap(),
             ty: Some(&f.ty),
             skip: attrs.skip,
+            comments,
         }
     }
 
     pub fn from_variant(v: &'a syn::Variant) -> Self {
+        let comments = parse_comments(&v.attrs);
         let attrs = parse_attrs(&v.attrs);
         if v.fields.len() > 1 {
             panic!("not implemented yet")
@@ -117,6 +125,7 @@ impl<'a> Field<'a> {
             ident: &v.ident,
             ty,
             skip: attrs.skip,
+            comments,
         }
     }
 }
@@ -183,4 +192,20 @@ fn get_lit_bool<'a>(lit: &'a syn::Lit) -> Result<bool, ()> {
     } else {
         Err(())
     }
+}
+
+fn parse_comments(attrs: &[Attribute]) -> Vec<String> {
+    let mut result = Vec::new();
+
+    attrs.iter().for_each(|attr| {
+        if attr.path.is_ident("doc") {
+            if let Ok(NameValue(nv)) = &attr.parse_meta() {
+                if let Ok(s) = get_lit_str(&nv.lit) {
+                    let comment = s.value();
+                    result.push(comment.trim().to_string());
+                }
+            }
+        }
+    });
+    result
 }
