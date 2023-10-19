@@ -158,4 +158,24 @@ export interface StructWithComments {
 }"#
         );
     }
+
+    #[test]
+    fn test_uint8array() {
+        #[derive(TS)]
+        #[ts(file_name = "file.ts", rename_all = "camelCase")]
+        pub struct File {
+            pub data: Vec<u8>,
+        }
+
+        let mut manager = DescriptorManager::default();
+        File::_register(&mut manager);
+        let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
+        assert_eq!(file_name, "file.ts");
+        assert_eq!(
+            content.trim(),
+            r#"export interface File {
+    data: Uint8Array
+}"#
+        );
+    }
 }
