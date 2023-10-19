@@ -10,9 +10,17 @@ use crate::utils::remove_ext;
 pub trait TS {
     fn _register(manager: &mut DescriptorManager) -> usize;
     // The name of this Rust type in Typescript.
+    // u8 -> number
+    // f64 -> number
     fn _ts_name() -> String;
     fn _is_optional() -> bool {
         false
+    }
+    // A special field for us to know about this type. It is always
+    // used in the Rust builtin types like mapping `Vec<u8>`` to `Uint8Array`
+    // rather than `readonly number[]`.
+    fn _tag() -> Option<&'static str> {
+        None
     }
 }
 
@@ -201,7 +209,7 @@ pub struct FieldDescriptor {
 }
 
 macro_rules! impl_builtin {
-    ($i: ident, $l: literal) => {
+    ($i: ident, $l: literal, $t: literal) => {
         impl TS for $i {
             fn _register(manager: &mut DescriptorManager) -> usize {
                 let type_id = TypeId::of::<$i>();
@@ -214,22 +222,26 @@ macro_rules! impl_builtin {
             fn _ts_name() -> String {
                 $l.to_string()
             }
+
+            fn _tag() -> Option<&'static str> {
+                Some($t)
+            }
         }
     };
 }
 
-impl_builtin!(u8, "number");
-impl_builtin!(u16, "number");
-impl_builtin!(u32, "number");
-impl_builtin!(u64, "number");
-impl_builtin!(usize, "number");
-impl_builtin!(i8, "number");
-impl_builtin!(i32, "number");
-impl_builtin!(i64, "number");
-impl_builtin!(f32, "number");
-impl_builtin!(f64, "number");
-impl_builtin!(String, "string");
-impl_builtin!(bool, "boolean");
+impl_builtin!(u8, "number", "u8");
+impl_builtin!(u16, "number", "u16");
+impl_builtin!(u32, "number", "u32");
+impl_builtin!(u64, "number", "u64");
+impl_builtin!(usize, "number", "usize");
+impl_builtin!(i8, "number", "i8");
+impl_builtin!(i32, "number", "i32");
+impl_builtin!(i64, "number", "i64");
+impl_builtin!(f32, "number", "f32");
+impl_builtin!(f64, "number", "f64");
+impl_builtin!(String, "string", "string");
+impl_builtin!(bool, "boolean", "bool");
 
 impl<T: TS + 'static> TS for Vec<T> {
     fn _register(manager: &mut DescriptorManager) -> usize {
@@ -244,6 +256,11 @@ impl<T: TS + 'static> TS for Vec<T> {
     }
 
     fn _ts_name() -> String {
+        if let Some(t) = T::_tag() {
+            if t == "u8" {
+                return "Uint8Array".to_string();
+            }
+        }
         format!("readonly {}[]", T::_ts_name())
     }
 }
