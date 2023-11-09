@@ -286,6 +286,24 @@ impl<T: TS + 'static> TS for Option<T> {
     }
 }
 
+impl<T: TS + 'static, E: TS + 'static> TS for Result<T, E> {
+    fn _register(manager: &mut DescriptorManager) -> usize {
+        let t_idx = T::_register(manager);
+        let e_idx = E::_register(manager);
+        let type_id = TypeId::of::<Self>();
+        let descriptor = GenericDescriptor {
+            dependencies: vec![t_idx, e_idx],
+            ts_name: Self::_ts_name(),
+            optional: false,
+        };
+        manager.registry(type_id, Descriptor::Generics(descriptor))
+    }
+
+    fn _ts_name() -> String {
+        format!("{} | {}", T::_ts_name(), E::_ts_name())
+    }
+}
+
 impl<K, V> TS for (K, V)
 where
     K: TS + 'static,
