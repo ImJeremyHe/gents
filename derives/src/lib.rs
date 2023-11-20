@@ -8,6 +8,26 @@ use container::{Container, RenameAll};
 use proc_macro::TokenStream;
 use quote::quote;
 
+use crate::container::GentsWasmAttrs;
+
+#[proc_macro_attribute]
+pub fn gents_header(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item: proc_macro2::TokenStream = item.into();
+    let attrs = syn::parse2::<GentsWasmAttrs>(attr.into()).expect("parse error, please check");
+    let file_name = attrs.get_file_name();
+    quote! {
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        #[cfg_attr(any(test, feature = "gents"), derive(::gents_derives::TS))]
+        #[cfg_attr(
+            any(test, feature = "gents"),
+            ts(file_name = #file_name, rename_all = "camelCase")
+        )]
+        #[serde(rename_all = "camelCase")]
+        #item
+    }
+    .into()
+}
+
 #[proc_macro_derive(TS, attributes(ts))]
 pub fn derive_ts(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

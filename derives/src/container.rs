@@ -1,8 +1,9 @@
 use proc_macro2::Ident;
+use syn::parse::Parse;
+use syn::punctuated::Punctuated;
+use syn::token::Comma;
 use syn::Attribute;
-use syn::Meta::List;
-use syn::Meta::NameValue;
-use syn::NestedMeta::Meta;
+use syn::MetaNameValue;
 use syn::Type;
 
 use crate::symbol::FILE_NAME;
@@ -30,24 +31,22 @@ impl<'a> Container<'a> {
             .flat_map(|attr| get_ts_meta_items(attr))
             .flatten()
         {
-            match meta_item {
-                Meta(NameValue(m)) if m.path == RENAME_ALL => {
-                    let s = get_lit_str(&m.lit).expect("rename_all requires lit str");
-                    let t = match s.value().as_str() {
-                        "camelCase" => RenameAll::CamelCase,
-                        _ => panic!("unexpected literal for case converting"),
-                    };
-                    rename_all = Some(t);
-                }
-                Meta(NameValue(m)) if m.path == FILE_NAME => {
-                    let s = get_lit_str(&m.lit).expect("file_name requires lit str");
-                    file_name = Some(s.value());
-                }
-                Meta(NameValue(m)) if m.path == RENAME => {
-                    let s = get_lit_str(&m.lit).expect("rename requires lit str");
-                    rename = Some(s.value());
-                }
-                _ => panic!("unexpected attr"),
+            let m = meta_item;
+            if m.path == RENAME_ALL {
+                let s = get_lit_str(&m.value).expect("rename_all requires lit str");
+                let t = match s.value().as_str() {
+                    "camelCase" => RenameAll::CamelCase,
+                    _ => panic!("unexpected literal for case converting"),
+                };
+                rename_all = Some(t);
+            } else if m.path == FILE_NAME {
+                let s = get_lit_str(&m.value).expect("file_name requires lit str");
+                file_name = Some(s.value());
+            } else if m.path == RENAME {
+                let s = get_lit_str(&m.value).expect("rename requires lit str");
+                rename = Some(s.value());
+            } else {
+                panic!("unexpected attr")
             }
         }
         match &item.data {
@@ -138,20 +137,17 @@ fn parse_attrs<'a>(attrs: &'a Vec<Attribute>) -> FieldAttrs {
         .flat_map(|attr| get_ts_meta_items(attr))
         .flatten()
     {
-        match meta_item {
-            Meta(NameValue(m)) if m.path == RENAME => {
-                if let Ok(s) = get_lit_str(&m.lit) {
-                    rename = Some(s.value());
-                }
+        let m = meta_item;
+        if m.path == RENAME {
+            if let Ok(s) = get_lit_str(&m.value) {
+                rename = Some(s.value());
             }
-            Meta(NameValue(m)) if m.path == SKIP => {
-                if let Ok(s) = get_lit_bool(&m.lit) {
-                    skip = s;
-                } else {
-                    panic!("expected bool value in skip attr")
-                }
+        } else if m.path == SKIP {
+            if let Ok(s) = get_lit_bool(&m.value) {
+                skip = s;
+            } else {
+                panic!("expected bool value in skip attr")
             }
-            _ => {}
         }
     }
     FieldAttrs { skip, rename }
@@ -166,41 +162,42 @@ pub enum RenameAll {
     CamelCase,
 }
 
-fn get_ts_meta_items(attr: &syn::Attribute) -> Result<Vec<syn::NestedMeta>, ()> {
-    if attr.path != TS {
+fn get_ts_meta_items(attr: &syn::Attribute) -> Result<Vec<syn::MetaNameValue>, ()> {
+    if attr.path() != TS {
         return Ok(Vec::new());
     }
 
-    match attr.parse_meta() {
-        Ok(List(meta)) => Ok(meta.nested.into_iter().collect()),
-        Ok(_) => Err(()),
+    match attr.parse_args_with(Punctuated::<MetaNameValue, Comma>::parse_terminated) {
+        Ok(name_values) => Ok(name_values.into_iter().collect()),
         Err(_) => Err(()),
     }
 }
 
-fn get_lit_str<'a>(lit: &'a syn::Lit) -> Result<&'a syn::LitStr, ()> {
-    if let syn::Lit::Str(lit) = lit {
-        Ok(lit)
-    } else {
-        Err(())
+fn get_lit_str<'a>(lit: &'a syn::Expr) -> Result<&'a syn::LitStr, ()> {
+    if let syn::Expr::Lit(lit) = lit {
+        if let syn::Lit::Str(l) = &lit.lit {
+            return Ok(&l);
+        }
     }
+    Err(())
 }
 
-fn get_lit_bool<'a>(lit: &'a syn::Lit) -> Result<bool, ()> {
-    if let syn::Lit::Bool(b) = lit {
-        Ok(b.value)
-    } else {
-        Err(())
+fn get_lit_bool<'a>(lit: &'a syn::Expr) -> Result<bool, ()> {
+    if let syn::Expr::Lit(lit) = lit {
+        if let syn::Lit::Bool(b) = &lit.lit {
+            return Ok(b.value);
+        }
     }
+    Err(())
 }
 
 fn parse_comments(attrs: &[Attribute]) -> Vec<String> {
     let mut result = Vec::new();
 
     attrs.iter().for_each(|attr| {
-        if attr.path.is_ident("doc") {
-            if let Ok(NameValue(nv)) = &attr.parse_meta() {
-                if let Ok(s) = get_lit_str(&nv.lit) {
+        if attr.path().is_ident("doc") {
+            if let Ok(nv) = attr.meta.require_name_value() {
+                if let Ok(s) = get_lit_str(&nv.value) {
                     let comment = s.value();
                     result.push(comment.trim().to_string());
                 }
@@ -208,4 +205,39 @@ fn parse_comments(attrs: &[Attribute]) -> Vec<String> {
         }
     });
     result
+}
+
+pub(crate) struct GentsWasmAttrs {
+    file_name: String,
+}
+
+impl GentsWasmAttrs {
+    pub fn get_file_name(&self) -> &str {
+        &self.file_name
+    }
+}
+
+impl Parse for GentsWasmAttrs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let name_values = Punctuated::<MetaNameValue, Comma>::parse_terminated(input)?;
+        let mut file_name = String::new();
+        name_values.into_iter().for_each(|name_value| {
+            let path = name_value.path;
+            let attr = path
+                .get_ident()
+                .expect("unvalid attr, should be an ident")
+                .to_string();
+            let value = get_lit_str(&name_value.value)
+                .expect("should be a str")
+                .value();
+            match attr.as_str() {
+                "file_name" => file_name = value,
+                _ => panic!("invalid attr: {}", attr),
+            }
+        });
+        if file_name.is_empty() {
+            panic!("file_name unset")
+        }
+        Ok(GentsWasmAttrs { file_name })
+    }
 }

@@ -47,6 +47,7 @@ pub struct TestSkip {
 mod tests {
     use super::*;
     use gents::*;
+    use gents_derives::gents_header;
 
     #[test]
     fn gen_skip_test() {
@@ -177,5 +178,33 @@ export interface StructWithComments {
     data: Uint8Array
 }"#
         );
+    }
+
+    #[test]
+    fn test_result() {
+        #[gents_header(file_name = "test_struct.ts")]
+        pub struct TestStruct {
+            pub f1: u8,
+            pub f2: Result<String, u16>,
+        }
+        let mut manager = DescriptorManager::default();
+        TestStruct::_register(&mut manager);
+        let (_, content) = manager.gen_data().into_iter().next().unwrap();
+        assert_eq!(
+            content.trim(),
+            r#"export interface TestStruct {
+    f1: number
+    f2: string | number
+}"#
+        );
+    }
+
+    #[test]
+    fn test_gents_for_wasm() {
+        #[gents_header(file_name = "test_struct.ts")]
+        pub struct TestStruct {
+            pub f1: u8,
+            pub f2: String,
+        }
     }
 }
