@@ -74,14 +74,14 @@ impl DescriptorManager {
 
                 let fields_strings = d.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
                     let optional = if fd.optional {
-                        String::from(" | null")
+                        String::from("?")
                     } else {
                         String::from("")
                     };
                     let ident = fd.ident.to_string();
                     let ty = fd.ts_ty.to_string();
                     let c = get_comment_string(&fd.comments, true);
-                    let f = format!("{}    {}: {}{}", c, ident, ty, optional);
+                    let f = format!("{}    {}{}: {}", c, ident, optional, ty);
                     prev.push(f);
                     prev
                 });
