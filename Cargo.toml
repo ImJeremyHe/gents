@@ -2,12 +2,12 @@
 authors = ["ImJeremyHe<yiliang.he@qq.com>"]
 edition = "2018"
 name = "gents"
-version = "0.7.0"
+version = "0.8.0"
 license = "MIT"
 description = "generate Typescript interfaces from Rust code"
 repository = "https://github.com/ImJeremyHe/gents"
 keywords = ["Typescript", "interface", "ts-rs", "Rust", "wasm"]
 
 [dev-dependencies]
-gents_derives = {version = "0.7.0", path = "./derives"}
+gents_derives = {version = "0.8.0", path = "./derives"}
 serde = {version = "1.0", features = ["derive"]}
