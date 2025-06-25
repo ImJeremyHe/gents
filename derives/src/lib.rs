@@ -17,7 +17,7 @@ pub fn gents_header(attr: TokenStream, item: TokenStream) -> TokenStream {
     let file_name = attrs.get_file_name();
     quote! {
         #[derive(::serde::Serialize, ::serde::Deserialize)]
-        #[cfg_attr(any(test, feature = "gents"), derive(::gents_derives::TS))]
+        #[cfg_attr(feature = "gents", derive(::gents_derives::TS))]
         #[cfg_attr(
             any(test, feature = "gents"),
             ts(file_name = #file_name, rename_all = "camelCase")
@@ -47,12 +47,23 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
         None => ident.to_string(),
     };
     let comments = container.comments;
+    let need_builder = container.need_builder;
+    let tag = if let Some(t) = container.tag {
+        t
+    } else {
+        "".to_string()
+    };
     let register_func = {
         let field_ds = fields.into_iter().filter(|f| !f.skip).map(|s| {
             let fi = s.ident;
             let rename = s.rename;
             let ty = s.ty;
             let field_comments = s.comments;
+            let tag_value = if let Some(v) = s.tag_value {
+                v
+            } else {
+                "".to_string()
+            };
             let name = match (rename, &rename_all) {
                 (None, None) => fi.to_string(),
                 (None, Some(RenameAll::CamelCase)) => {
@@ -68,12 +79,13 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
             if let Some(ty) = ty {
                 quote! {
                     let dep = <#ty as ::gents::TS>::_register(manager);
-                    deps.insert(dep);
+                    deps.push(dep);
                     let fd = ::gents::FieldDescriptor {
                         ident: #name.to_string(),
                         optional: <#ty as ::gents::TS>::_is_optional(),
                         ts_ty: <#ty as ::gents::TS>::_ts_name(),
                         comments: vec![#(#field_comments.to_string()),*],
+                        tag_value: #tag_value.to_string(),
                     };
                     fields.push(fd);
                 }
@@ -84,6 +96,7 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
                         optional: false,
                         ts_ty: String::from(""),
                         comments: vec![#(#field_comments.to_string()),*],
+                        tag_value: #tag_value.to_string(),
                     };
                     fields.push(fd);
                 }
@@ -92,23 +105,24 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
         let descriptor = if is_enum {
             quote! {
                 let _enum = ::gents::EnumDescriptor {
-                    dependencies: deps.into_iter().collect(),
+                    dependencies: deps,
                     fields,
                     file_name: #file_name.to_string(),
                     ts_name: #ts_name.to_string(),
                     comments: vec![#(#comments.to_string()),*],
+                    tag: #tag.to_string(),
                 };
                 let descriptor = ::gents::Descriptor::Enum(_enum);
             }
         } else {
             quote! {
-                let deps_vec = deps.into_iter().collect();
                 let _interface = ::gents::InterfaceDescriptor {
-                    dependencies: deps_vec,
+                    dependencies: deps,
                     fields,
                     file_name: #file_name.to_string(),
                     ts_name: #ts_name.to_string(),
                     comments: vec![#(#comments.to_string()),*],
+                    need_builder: #need_builder,
                 };
                 let descriptor = ::gents::Descriptor::Interface(_interface);
             }
@@ -116,8 +130,8 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
         quote! {
             fn _register(manager: &mut ::gents::DescriptorManager) -> usize {
                 let type_id = std::any::TypeId::of::<Self>();
-                let mut deps = ::std::collections::HashSet::<usize>::new();
-                let mut fields = vec![];
+                let mut deps = ::std::vec::Vec::<usize>::new();
+                let mut fields = ::std::vec::Vec::<::gents::FieldDescriptor>::new();
                 #(#field_ds)*
                 #descriptor
                 manager.registry(type_id, descriptor)

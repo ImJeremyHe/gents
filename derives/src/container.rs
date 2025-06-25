@@ -6,7 +6,10 @@ use syn::Attribute;
 use syn::MetaNameValue;
 use syn::Type;
 
+use crate::symbol::BUILDER;
 use crate::symbol::FILE_NAME;
+use crate::symbol::TAG;
+use crate::symbol::TAG_VALUE;
 use crate::symbol::{RENAME, RENAME_ALL, SKIP, TS};
 
 pub struct Container<'a> {
@@ -17,6 +20,8 @@ pub struct Container<'a> {
     pub rename: Option<String>,
     pub ident: &'a Ident,
     pub comments: Vec<String>,
+    pub need_builder: bool,
+    pub tag: Option<String>,
 }
 
 impl<'a> Container<'a> {
@@ -24,11 +29,13 @@ impl<'a> Container<'a> {
         let mut rename_all: Option<RenameAll> = None;
         let mut file_name: Option<String> = None;
         let mut rename: Option<String> = None;
+        let mut need_builder = false;
+        let mut tag: Option<String> = None;
         let comments = parse_comments(&item.attrs);
         for meta_item in item
             .attrs
             .iter()
-            .flat_map(|attr| get_ts_meta_items(attr))
+            .flat_map(|attr| get_ts_meta_name_value_items(attr))
             .flatten()
         {
             let m = meta_item;
@@ -45,28 +52,49 @@ impl<'a> Container<'a> {
             } else if m.path == RENAME {
                 let s = get_lit_str(&m.value).expect("rename requires lit str");
                 rename = Some(s.value());
+            } else if m.path == TAG {
+                let s = get_lit_str(&m.value).expect("tag requires lit str");
+                tag = Some(s.value());
             } else {
                 panic!("unexpected attr")
             }
         }
+        for path in item
+            .attrs
+            .iter()
+            .flat_map(|attr| get_ts_meta_path_items(attr))
+            .flatten()
+        {
+            if path == BUILDER {
+                need_builder = true;
+            }
+        }
         match &item.data {
             syn::Data::Struct(ds) => {
+                if tag.is_some() {
+                    panic!("struct types doesn't support tag")
+                }
                 let fields = ds
                     .fields
                     .iter()
                     .map(|f| Field::from_field(f))
                     .collect::<Vec<_>>();
                 Container {
-                    file_name: file_name.expect("file name are required"),
+                    file_name: file_name.expect("file name is required"),
                     is_enum: false,
                     fields,
                     rename_all,
                     ident: &item.ident,
                     rename,
                     comments,
+                    need_builder,
+                    tag,
                 }
             }
             syn::Data::Enum(e) => {
+                if need_builder {
+                    panic!("enum does not support builder");
+                }
                 let fields = e
                     .variants
                     .iter()
@@ -80,6 +108,8 @@ impl<'a> Container<'a> {
                     ident: &item.ident,
                     rename,
                     comments,
+                    need_builder,
+                    tag,
                 }
             }
             _ => panic!("gents does not support the union type currently, use struct instead"),
@@ -93,6 +123,7 @@ pub struct Field<'a> {
     pub ty: Option<&'a Type>, // enum ty can be None.
     pub skip: bool,
     pub comments: Vec<String>,
+    pub tag_value: Option<String>,
 }
 
 impl<'a> Field<'a> {
@@ -105,6 +136,7 @@ impl<'a> Field<'a> {
             ty: Some(&f.ty),
             skip: attrs.skip,
             comments,
+            tag_value: attrs.tag_value,
         }
     }
 
@@ -125,6 +157,7 @@ impl<'a> Field<'a> {
             ty,
             skip: attrs.skip,
             comments,
+            tag_value: attrs.tag_value,
         }
     }
 }
@@ -132,9 +165,10 @@ impl<'a> Field<'a> {
 fn parse_attrs<'a>(attrs: &'a Vec<Attribute>) -> FieldAttrs {
     let mut skip = false;
     let mut rename: Option<String> = None;
+    let mut tag_value: Option<String> = None;
     for meta_item in attrs
         .iter()
-        .flat_map(|attr| get_ts_meta_items(attr))
+        .flat_map(|attr| get_ts_meta_name_value_items(attr))
         .flatten()
     {
         let m = meta_item;
@@ -148,26 +182,46 @@ fn parse_attrs<'a>(attrs: &'a Vec<Attribute>) -> FieldAttrs {
             } else {
                 panic!("expected bool value in skip attr")
             }
+        } else if m.path == TAG_VALUE {
+            if let Ok(s) = get_lit_str(&m.value) {
+                tag_value = Some(s.value());
+            }
         }
     }
-    FieldAttrs { skip, rename }
+    FieldAttrs {
+        skip,
+        rename,
+        tag_value,
+    }
 }
 
 struct FieldAttrs {
     skip: bool,
     rename: Option<String>,
+    tag_value: Option<String>,
 }
 
 pub enum RenameAll {
     CamelCase,
 }
 
-fn get_ts_meta_items(attr: &syn::Attribute) -> Result<Vec<syn::MetaNameValue>, ()> {
+fn get_ts_meta_name_value_items(attr: &syn::Attribute) -> Result<Vec<syn::MetaNameValue>, ()> {
     if attr.path() != TS {
         return Ok(Vec::new());
     }
 
     match attr.parse_args_with(Punctuated::<MetaNameValue, Comma>::parse_terminated) {
+        Ok(name_values) => Ok(name_values.into_iter().collect()),
+        Err(_) => Err(()),
+    }
+}
+
+fn get_ts_meta_path_items(attr: &syn::Attribute) -> Result<Vec<syn::Path>, ()> {
+    if attr.path() != TS {
+        return Ok(Vec::new());
+    }
+
+    match attr.parse_args_with(Punctuated::<syn::Path, Comma>::parse_terminated) {
         Ok(name_values) => Ok(name_values.into_iter().collect()),
         Err(_) => Err(()),
     }

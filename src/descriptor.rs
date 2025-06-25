@@ -1,6 +1,7 @@
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
+    path::Path,
 };
 
 use crate::utils::remove_ext;
@@ -28,10 +29,31 @@ pub trait TS {
 pub struct DescriptorManager {
     pub descriptors: Vec<Descriptor>,
     pub id_map: HashMap<TypeId, usize>,
+    tag_map: HashMap<usize, HashMap<String, Vec<String>>>,
 }
 
 impl DescriptorManager {
     pub fn registry(&mut self, type_id: TypeId, descriptor: Descriptor) -> usize {
+        if let Descriptor::Enum(v) = &descriptor {
+            if !v.tag.is_empty() {
+                v.fields
+                    .iter()
+                    .zip(v.dependencies.iter())
+                    .for_each(|(fd, idx)| {
+                        let tag_value = if fd.tag_value.is_empty() {
+                            fd.ident.to_string()
+                        } else {
+                            fd.tag_value.clone()
+                        };
+                        self.tag_map
+                            .entry(*idx)
+                            .or_insert_with(HashMap::new)
+                            .entry(v.tag.clone())
+                            .or_insert_with(Vec::new)
+                            .push(format!("\"{}\"", tag_value));
+                    });
+            }
+        }
         match self.id_map.get(&type_id) {
             Some(idx) => *idx,
             None => {
@@ -45,103 +67,139 @@ impl DescriptorManager {
 
     pub fn gen_data(self) -> Vec<(String, String)> {
         let mut result: Vec<(String, String)> = vec![];
-        let descriptors = self.descriptors;
-        descriptors.iter().for_each(|descriptor| match descriptor {
-            Descriptor::Interface(d) => {
-                let import_deps = d
-                    .dependencies
-                    .iter()
-                    .fold(HashSet::new(), |mut prev, curr| {
-                        let deps = get_import_deps_idx(&descriptors, *curr);
-                        prev.extend(deps);
-                        prev
-                    });
-                let import_string = {
-                    let mut imports = import_deps.into_iter().fold(vec![], |mut prev, idx| {
-                        let (ts_name, file_name) = get_import_deps(&descriptors, idx);
-                        let s = format!("import {{{}}} from './{}'", ts_name, file_name);
-                        prev.push(s);
-                        prev
-                    });
-                    imports.sort();
-                    let mut result = imports.join("\n");
-                    if !imports.is_empty() {
-                        result.push_str("\n");
-                    }
-                    result
-                };
-                let comments = get_comment_string(&d.comments, false);
-
-                let fields_strings = d.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
-                    let optional = if fd.optional {
-                        String::from("?")
-                    } else {
-                        String::from("")
+        let descriptors = &self.descriptors;
+        descriptors
+            .iter()
+            .enumerate()
+            .for_each(|(idx, descriptor)| match descriptor {
+                Descriptor::Interface(d) => {
+                    let tag_map = self.tag_map.get(&idx).map(|v| v.iter().collect::<Vec<_>>());
+                    let tag_content = {
+                        if let Some(tag_map) = tag_map.clone() {
+                            match tag_map.len() {
+                                0 => String::new(),
+                                1 => {
+                                    let (tag, values) = tag_map.iter().next().unwrap();
+                                    format!("{}: {};", tag, values.join(" | "))
+                                }
+                                _ => {
+                                    let mut result = String::new();
+                                    for (tag, values) in tag_map {
+                                        result.push_str(&format!(
+                                            "{}?: {};",
+                                            tag,
+                                            values.join(" | ")
+                                        ));
+                                    }
+                                    result
+                                }
+                            }
+                        } else {
+                            String::new()
+                        }
                     };
-                    let ident = fd.ident.to_string();
-                    let ty = fd.ts_ty.to_string();
-                    let c = get_comment_string(&fd.comments, true);
-                    let f = format!("{}    {}{}: {}", c, ident, optional, ty);
-                    prev.push(f);
-                    prev
-                });
-                let fields_string = fields_strings.join("\n");
-                let content = format!(
-                    "{}\n{}export interface {} {{\n{}\n}}\n",
-                    import_string,
-                    comments,
-                    d.ts_name.to_string(),
-                    fields_string
-                );
-                result.push((d.file_name.to_string(), content))
-            }
-            Descriptor::Enum(e) => {
-                let import_deps = e
-                    .dependencies
-                    .iter()
-                    .fold(HashSet::new(), |mut prev, curr| {
-                        let deps = get_import_deps_idx(&descriptors, *curr);
-                        prev.extend(deps);
-                        prev
-                    });
-                let import_string = {
-                    let mut imports = import_deps.into_iter().fold(vec![], |mut prev, idx| {
-                        let (ts_name, file_name) = get_import_deps(&descriptors, idx);
-                        let s = format!("import {{{}}} from './{}'", ts_name, file_name);
-                        prev.push(s);
-                        prev
-                    });
-                    imports.sort();
-                    let mut result = imports.join("\n");
-                    if !imports.is_empty() {
-                        result.push_str("\n");
-                    }
-                    result
-                };
-                let comments = get_comment_string(&e.comments, false);
-
-                let fields_strings = e.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
-                    let ident = fd.ident.to_string();
-                    let ty = fd.ts_ty.to_string();
-                    let f = if ty != "" {
-                        format!("{{{}: {}}}", ident, ty)
-                    } else {
-                        format!(r#"'{}'"#, ident)
+                    let import_deps =
+                        d.dependencies
+                            .iter()
+                            .fold(HashSet::new(), |mut prev, curr| {
+                                let deps = get_import_deps_idx(&descriptors, *curr);
+                                prev.extend(deps);
+                                prev
+                            });
+                    let import_string = {
+                        let mut imports = import_deps.into_iter().fold(vec![], |mut prev, idx| {
+                            let (ts_name, file_name) = get_import_deps(&descriptors, idx);
+                            let s = format!("import {{{}}} from './{}'", ts_name, file_name);
+                            prev.push(s);
+                            prev
+                        });
+                        imports.sort();
+                        let mut result = imports.join("\n");
+                        if !imports.is_empty() {
+                            result.push_str("\n");
+                        }
+                        result
                     };
-                    let f = format!("| {}", f);
-                    prev.push(f);
-                    prev
-                });
-                let fields_string = fields_strings.join("\n    ");
-                let ts_name = e.ts_name.to_string();
-                let content = format!(
-                    "{}\n{}export type {} =\n    {}\n",
-                    import_string, comments, ts_name, fields_string
-                );
-                result.push((e.file_name.to_string(), content))
-            }
-            _ => {}
-        });
+                    let comments = get_comment_string(&d.comments, false);
+
+                    let fields_strings =
+                        d.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
+                            let optional = if fd.optional {
+                                String::from("?")
+                            } else {
+                                String::from("")
+                            };
+                            let ident = fd.ident.to_string();
+                            let ty = fd.ts_ty.to_string();
+                            let c = get_comment_string(&fd.comments, true);
+                            let f = format!("{}    {}{}: {}", c, ident, optional, ty);
+                            prev.push(f);
+                            prev
+                        });
+                    let fields_string = fields_strings.join("\n");
+                    let mut content = format!(
+                        "{}\n{}export interface {} {{\n{}{}\n}}\n",
+                        import_string,
+                        comments,
+                        d.ts_name.to_string(),
+                        tag_content,
+                        fields_string
+                    );
+
+                    if d.need_builder {
+                        let builder_content = generate_builder(&d, tag_map.clone());
+                        content.push_str("\n");
+                        content.push_str(&builder_content);
+                    }
+                    result.push((d.file_name.to_string(), format(content)))
+                }
+                Descriptor::Enum(e) => {
+                    let import_deps =
+                        e.dependencies
+                            .iter()
+                            .fold(HashSet::new(), |mut prev, curr| {
+                                let deps = get_import_deps_idx(&descriptors, *curr);
+                                prev.extend(deps);
+                                prev
+                            });
+                    let import_string = {
+                        let mut imports = import_deps.into_iter().fold(vec![], |mut prev, idx| {
+                            let (ts_name, file_name) = get_import_deps(&descriptors, idx);
+                            let s = format!("import {{{}}} from './{}'", ts_name, file_name);
+                            prev.push(s);
+                            prev
+                        });
+                        imports.sort();
+                        let mut result = imports.join("\n");
+                        if !imports.is_empty() {
+                            result.push_str("\n");
+                        }
+                        result
+                    };
+                    let comments = get_comment_string(&e.comments, false);
+
+                    let fields_strings =
+                        e.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
+                            let ident = fd.ident.to_string();
+                            let ty = fd.ts_ty.to_string();
+                            let f = if ty != "" {
+                                format!("{{{}: {}}}", ident, ty)
+                            } else {
+                                format!(r#"'{}'"#, ident)
+                            };
+                            let f = format!("{}", f);
+                            prev.push(f);
+                            prev
+                        });
+                    let fields_string = fields_strings.join("|\n    ");
+                    let ts_name = e.ts_name.to_string();
+                    let content = format!(
+                        "{import_string}\n{comments}export type {ts_name} =\n    {fields_string}\n",
+                    );
+                    result.push((e.file_name.to_string(), format(content)))
+                }
+                _ => {}
+            });
         result
     }
 }
@@ -187,6 +245,7 @@ pub struct EnumDescriptor {
     pub file_name: String,
     pub ts_name: String,
     pub comments: Vec<String>,
+    pub tag: String,
 }
 
 /// Describe how to generate a ts interface.
@@ -198,6 +257,7 @@ pub struct InterfaceDescriptor {
     pub file_name: String,
     pub ts_name: String,
     pub comments: Vec<String>,
+    pub need_builder: bool,
 }
 
 #[derive(Debug)]
@@ -206,6 +266,7 @@ pub struct FieldDescriptor {
     pub optional: bool,
     pub ts_ty: String,
     pub comments: Vec<String>,
+    pub tag_value: String,
 }
 
 macro_rules! impl_builtin {
@@ -374,4 +435,173 @@ fn get_import_deps(all: &Vec<Descriptor>, idx: usize) -> (String, String) {
         Descriptor::Enum(d) => (d.ts_name.to_string(), remove_ext(&d.file_name)),
         _ => unreachable!(),
     }
+}
+
+fn generate_builder(
+    d: &InterfaceDescriptor,
+    tag_map: Option<Vec<(&String, &Vec<String>)>>,
+) -> String {
+    let field_initializers = d
+        .fields
+        .iter()
+        .map(|fd| {
+            if fd.optional {
+                format!("private _{}?: {};", fd.ident, fd.ts_ty)
+            } else {
+                format!("private _{}!: {};", fd.ident, fd.ts_ty)
+            }
+        })
+        .collect::<Vec<_>>();
+    let field_setters = d
+        .fields
+        .iter()
+        .map(|fd| {
+            format!(
+                "public {}(value: {}) {{\n    this._{} = value\n    return this\n}}\n",
+                fd.ident, fd.ts_ty, fd.ident
+            )
+        })
+        .collect::<Vec<_>>();
+    let (tag_initializers, tag_result) = {
+        if tag_map.is_none() {
+            ("".to_string(), "".to_string())
+        } else {
+            let tag_content = {
+                if let Some(tag_map) = tag_map.clone() {
+                    match tag_map.len() {
+                        0 => (String::new(), String::new()),
+                        1 => {
+                            let (tag, values) = tag_map.iter().next().unwrap();
+                            (
+                                format!("private _{}: {};", tag, values.join(" | ")),
+                                format!("{}: this._{},", tag, tag),
+                            )
+                        }
+                        _ => {
+                            let mut result_content = String::new();
+                            let mut result = String::new();
+                            for (tag, values) in tag_map {
+                                result_content.push_str(&format!(
+                                    "private _{}?: {};",
+                                    tag,
+                                    values.join(" | ")
+                                ));
+                                result.push_str(&format!("{}: this._{},", tag, tag));
+                            }
+                            result_content.push_str("\n");
+                            result.push_str("\n");
+                            (result_content, result)
+                        }
+                    }
+                } else {
+                    (String::new(), String::new())
+                }
+            };
+            tag_content
+        }
+    };
+    let tag_setters = {
+        if tag_map.is_none() {
+            "".to_string()
+        } else {
+            let tag_map = tag_map.unwrap();
+            match tag_map.len() {
+                0 => "".to_string(),
+                1 => {
+                    let (tag, fields) = tag_map.get(0).unwrap();
+                    if fields.len() <= 1 {
+                        "".to_string()
+                    } else {
+                        format!(
+                            "public {}(v: {}) {{\n    this._{} = v\n    return this\n}}\n",
+                            tag,
+                            fields.join(" | "),
+                            tag,
+                        )
+                    }
+                }
+                _ => {
+                    let mut tag_setters = vec![];
+                    for (tag, fields) in tag_map {
+                        match fields.len() {
+                            0 => {}
+                            1 => tag_setters.push(format!(
+                                "public {}() {{\n    this._{} = {}\n    return this\n}}\n",
+                                tag,
+                                tag,
+                                fields.get(0).unwrap()
+                            )),
+                            _ => tag_setters.push(format!(
+                                "public {}(v: {}) {{\n    this._{} = v\n    return this\n}}\n",
+                                tag,
+                                fields.join(" | "),
+                                tag,
+                            )),
+                        }
+                    }
+                    tag_setters.join("\n    ")
+                }
+            }
+        }
+    };
+    let build_func = {
+        let field_validators = d
+            .fields
+            .iter()
+            .filter(|fd| !fd.optional)
+            .map(|fd| {
+                format!(
+                    "if (!this._{}) {{ throw new Error('missing {}') }}",
+                    fd.ident, fd.ident
+                )
+            })
+            .collect::<Vec<_>>();
+        let field_set = d
+            .fields
+            .iter()
+            .map(|fd| format!("{}: this._{},", fd.ident, fd.ident))
+            .collect::<Vec<_>>();
+        format!(
+            "public build() {{\n    {}\n    return {{{}{}}}\n}}\n",
+            field_validators.join("\n"),
+            tag_result,
+            field_set.join("\n")
+        )
+    };
+    format!(
+        "export class {}Builder {{\n    {}    {}    {}\n    {}\n    {}\n}}",
+        d.ts_name,
+        tag_initializers.trim(),
+        field_initializers.join("\n    ").trim(),
+        field_setters.join("\n    ").trim(),
+        tag_setters.trim(),
+        build_func.trim(),
+    )
+}
+
+fn format(text: String) -> String {
+    use dprint_plugin_typescript::configuration::*;
+    use dprint_plugin_typescript::*;
+    let config = ConfigurationBuilder::new()
+        .line_width(80)
+        .semi_colons(SemiColons::Asi)
+        .indent_width(4)
+        .prefer_single_line(false)
+        .quote_style(QuoteStyle::PreferSingle)
+        .trailing_commas(TrailingCommas::Never)
+        .member_expression_line_per_expression(true)
+        .build();
+    let result = format_text(FormatTextOptions {
+        path: Path::new("dummy.ts"),
+        extension: None,
+        text: text.clone(),
+        config: &config,
+        external_formatter: None,
+    });
+    if let Err(e) = result {
+        println!("{}", text);
+        panic!("Failed to format text: {}", e);
+    }
+    let r = result.unwrap().unwrap();
+    r
 }
