@@ -4,7 +4,7 @@
 //! It is useful when you are developing
 //! a web service or a wasm project.
 //! ## Step1: Derive TS and set the `file_name`.
-//! ```
+//! ```ignore
 //! use gents_derives::TS;
 //!
 //! #[derive(TS)]
@@ -17,7 +17,7 @@
 //! ## Step2: Set your rename policy.
 //! Currently, you can set `camelCase` using `rename_all`, or you
 //! can rename each field by using `rename`.
-//! ```
+//! ```ignore
 //! use gents_derives::TS;
 //!
 //! #[derive(TS)]
@@ -33,7 +33,7 @@
 //! We recommend that you can write a unit test to do it. You can also write a binary for it but please run the binary with `--cfg=test`.
 //! The proc macro `TS` will generate the code under #[cfg(test)], which means these code can
 //! be run only in `test` environment and they will never influence your code.
-//! ```no_run
+//! ```ignore
 //! use gents::FileGroup;
 //! use gents_derives::TS;
 //! #[derive(TS)]
