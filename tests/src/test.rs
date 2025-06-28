@@ -249,7 +249,7 @@ export interface Variant {
 }
 
 export class VariantBuilder {
-    private _type: 'variant'
+    private _type = 'variant'
     private _f1!: number
     private _f2!: string
     public f1(value: number) {
@@ -275,8 +275,7 @@ export class VariantBuilder {
     #[test]
     fn test_enum_tag_and_builder_2() {
         #[derive(TS)]
-        #[ts(file_name = "a.ts", rename_all = "camelCase")]
-        #[ts(builder)]
+        #[ts(builder, file_name = "a.ts", rename_all = "camelCase")]
         pub struct V1 {
             pub f1: u8,
             pub f2: String,
@@ -314,7 +313,7 @@ export interface V1 {
 }
 
 export class V1Builder {
-    private _type: 'tag1' | 'tag3'
+    private _type!: 'tag1' | 'tag3'
     private _f1!: number
     private _f2!: string
     public f1(value: number) {
@@ -349,7 +348,7 @@ export interface V2 {
 }
 
 export class V2Builder {
-    private _type: 'tag2'
+    private _type = 'tag2'
     private _f3!: number
     public f3(value: number) {
         this._f3 = value
@@ -372,9 +371,9 @@ import { V1 } from './a'
 import { V2 } from './b'
 
 export type TaggedEnum =
-    | { v1: V1 }
-    | { v2: V2 }
-    | { v3: V1 }"#
+    | V1
+    | V2
+    | V1"#
                         .trim()
                 );
             }
