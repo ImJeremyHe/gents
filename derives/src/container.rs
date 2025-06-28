@@ -3,6 +3,7 @@ use syn::parse::Parse;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::Attribute;
+use syn::Meta;
 use syn::MetaNameValue;
 use syn::Type;
 
@@ -35,38 +36,38 @@ impl<'a> Container<'a> {
         for meta_item in item
             .attrs
             .iter()
-            .flat_map(|attr| get_ts_meta_name_value_items(attr))
+            .flat_map(|attr| get_ts_meta_items(attr))
             .flatten()
         {
             let m = meta_item;
-            if m.path == RENAME_ALL {
-                let s = get_lit_str(&m.value).expect("rename_all requires lit str");
-                let t = match s.value().as_str() {
-                    "camelCase" => RenameAll::CamelCase,
-                    _ => panic!("unexpected literal for case converting"),
-                };
-                rename_all = Some(t);
-            } else if m.path == FILE_NAME {
-                let s = get_lit_str(&m.value).expect("file_name requires lit str");
-                file_name = Some(s.value());
-            } else if m.path == RENAME {
-                let s = get_lit_str(&m.value).expect("rename requires lit str");
-                rename = Some(s.value());
-            } else if m.path == TAG {
-                let s = get_lit_str(&m.value).expect("tag requires lit str");
-                tag = Some(s.value());
-            } else {
-                panic!("unexpected attr")
-            }
-        }
-        for path in item
-            .attrs
-            .iter()
-            .flat_map(|attr| get_ts_meta_path_items(attr))
-            .flatten()
-        {
-            if path == BUILDER {
-                need_builder = true;
+            match m {
+                Meta::Path(path) => {
+                    if path == BUILDER {
+                        need_builder = true;
+                    }
+                }
+                Meta::List(_) => panic!("unexpected meta list"),
+                Meta::NameValue(m) => {
+                    if m.path == RENAME_ALL {
+                        let s = get_lit_str(&m.value).expect("rename_all requires lit str");
+                        let t = match s.value().as_str() {
+                            "camelCase" => RenameAll::CamelCase,
+                            _ => panic!("unexpected literal for case converting"),
+                        };
+                        rename_all = Some(t);
+                    } else if m.path == FILE_NAME {
+                        let s = get_lit_str(&m.value).expect("file_name requires lit str");
+                        file_name = Some(s.value());
+                    } else if m.path == RENAME {
+                        let s = get_lit_str(&m.value).expect("rename requires lit str");
+                        rename = Some(s.value());
+                    } else if m.path == TAG {
+                        let s = get_lit_str(&m.value).expect("tag requires lit str");
+                        tag = Some(s.value());
+                    } else {
+                        panic!("unexpected attr")
+                    }
+                }
             }
         }
         match &item.data {
@@ -205,23 +206,23 @@ pub enum RenameAll {
     CamelCase,
 }
 
+fn get_ts_meta_items(attr: &syn::Attribute) -> Result<Vec<syn::Meta>, ()> {
+    if attr.path() != TS {
+        return Ok(Vec::new());
+    }
+
+    match attr.parse_args_with(Punctuated::<syn::Meta, Comma>::parse_terminated) {
+        Ok(name_values) => Ok(name_values.into_iter().collect()),
+        Err(_) => Err(()),
+    }
+}
+
 fn get_ts_meta_name_value_items(attr: &syn::Attribute) -> Result<Vec<syn::MetaNameValue>, ()> {
     if attr.path() != TS {
         return Ok(Vec::new());
     }
 
     match attr.parse_args_with(Punctuated::<MetaNameValue, Comma>::parse_terminated) {
-        Ok(name_values) => Ok(name_values.into_iter().collect()),
-        Err(_) => Err(()),
-    }
-}
-
-fn get_ts_meta_path_items(attr: &syn::Attribute) -> Result<Vec<syn::Path>, ()> {
-    if attr.path() != TS {
-        return Ok(Vec::new());
-    }
-
-    match attr.parse_args_with(Punctuated::<syn::Path, Comma>::parse_terminated) {
         Ok(name_values) => Ok(name_values.into_iter().collect()),
         Err(_) => Err(()),
     }

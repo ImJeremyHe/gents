@@ -29,7 +29,7 @@ pub trait TS {
 pub struct DescriptorManager {
     pub descriptors: Vec<Descriptor>,
     pub id_map: HashMap<TypeId, usize>,
-    tag_map: HashMap<usize, HashMap<String, Vec<String>>>,
+    tag_map: HashMap<usize, HashMap<String, HashSet<String>>>,
 }
 
 impl DescriptorManager {
@@ -49,8 +49,8 @@ impl DescriptorManager {
                             .entry(*idx)
                             .or_insert_with(HashMap::new)
                             .entry(v.tag.clone())
-                            .or_insert_with(Vec::new)
-                            .push(format!("\"{}\"", tag_value));
+                            .or_insert_with(HashSet::new)
+                            .insert(format!("\"{}\"", tag_value));
                     });
             }
         }
@@ -80,11 +80,13 @@ impl DescriptorManager {
                                 0 => String::new(),
                                 1 => {
                                     let (tag, values) = tag_map.iter().next().unwrap();
+                                    let values = hashset_to_vec(values);
                                     format!("{}: {};", tag, values.join(" | "))
                                 }
                                 _ => {
                                     let mut result = String::new();
                                     for (tag, values) in tag_map {
+                                        let values = hashset_to_vec(values);
                                         result.push_str(&format!(
                                             "{}?: {};",
                                             tag,
@@ -183,7 +185,11 @@ impl DescriptorManager {
                             let ident = fd.ident.to_string();
                             let ty = fd.ts_ty.to_string();
                             let f = if ty != "" {
-                                format!("{{{}: {}}}", ident, ty)
+                                if e.tag != "" {
+                                    format!(r#"{}"#, ty)
+                                } else {
+                                    format!("{{{}: {}}}", ident, ty)
+                                }
                             } else {
                                 format!(r#"'{}'"#, ident)
                             };
@@ -439,7 +445,7 @@ fn get_import_deps(all: &Vec<Descriptor>, idx: usize) -> (String, String) {
 
 fn generate_builder(
     d: &InterfaceDescriptor,
-    tag_map: Option<Vec<(&String, &Vec<String>)>>,
+    tag_map: Option<Vec<(&String, &HashSet<String>)>>,
 ) -> String {
     let field_initializers = d
         .fields
@@ -472,8 +478,14 @@ fn generate_builder(
                         0 => (String::new(), String::new()),
                         1 => {
                             let (tag, values) = tag_map.iter().next().unwrap();
+                            let values = hashset_to_vec(values);
                             (
-                                format!("private _{}: {};", tag, values.join(" | ")),
+                                format!(
+                                    "private _{} {} {};",
+                                    tag,
+                                    if values.len() <= 1 { "=" } else { "!:" },
+                                    values.join(" | ")
+                                ),
                                 format!("{}: this._{},", tag, tag),
                             )
                         }
@@ -481,6 +493,7 @@ fn generate_builder(
                             let mut result_content = String::new();
                             let mut result = String::new();
                             for (tag, values) in tag_map {
+                                let values = hashset_to_vec(values);
                                 result_content.push_str(&format!(
                                     "private _{}?: {};",
                                     tag,
@@ -509,6 +522,7 @@ fn generate_builder(
                 0 => "".to_string(),
                 1 => {
                     let (tag, fields) = tag_map.get(0).unwrap();
+                    let fields = hashset_to_vec(fields);
                     if fields.len() <= 1 {
                         "".to_string()
                     } else {
@@ -523,6 +537,7 @@ fn generate_builder(
                 _ => {
                     let mut tag_setters = vec![];
                     for (tag, fields) in tag_map {
+                        let fields = hashset_to_vec(fields);
                         match fields.len() {
                             0 => {}
                             1 => tag_setters.push(format!(
@@ -604,4 +619,10 @@ fn format(text: String) -> String {
     }
     let r = result.unwrap().unwrap();
     r
+}
+
+fn hashset_to_vec<T: Ord + Clone>(set: &HashSet<T>) -> Vec<T> {
+    let mut v = set.iter().map(|v| v.clone()).collect::<Vec<_>>();
+    v.sort();
+    v
 }
