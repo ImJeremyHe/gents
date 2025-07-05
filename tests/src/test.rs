@@ -211,7 +211,7 @@ export class ABuilder {
     }
 
     public build() {
-        if (!this._f1) throw new Error('missing f1')
+        if (this._f1 === undefined) throw new Error('missing f1')
         return { f1: this._f1 }
     }
 }
@@ -263,8 +263,8 @@ export class VariantBuilder {
     }
 
     public build() {
-        if (!this._f1) throw new Error('missing f1')
-        if (!this._f2) throw new Error('missing f2')
+        if (this._f1 === undefined) throw new Error('missing f1')
+        if (this._f2 === undefined) throw new Error('missing f2')
         return { type: this._type, f1: this._f1, f2: this._f2 }
     }
 }"#
@@ -330,8 +330,8 @@ export class V1Builder {
         return this
     }
     public build() {
-        if (!this._f1) throw new Error('missing f1')
-        if (!this._f2) throw new Error('missing f2')
+        if (this._f1 === undefined) throw new Error('missing f1')
+        if (this._f2 === undefined) throw new Error('missing f2')
         return { type: this._type, f1: this._f1, f2: this._f2 }
     }
 }"#
@@ -356,7 +356,7 @@ export class V2Builder {
     }
 
     public build() {
-        if (!this._f3) throw new Error('missing f3')
+        if (this._f3 === undefined) throw new Error('missing f3')
         return { type: this._type, f3: this._f3 }
     }
 }"#
