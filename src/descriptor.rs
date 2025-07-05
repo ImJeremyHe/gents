@@ -566,7 +566,7 @@ fn generate_builder(
             .filter(|fd| !fd.optional)
             .map(|fd| {
                 format!(
-                    "if (!this._{}) {{ throw new Error('missing {}') }}",
+                    "if (this._{} === undefined) {{ throw new Error('missing {}') }}",
                     fd.ident, fd.ident
                 )
             })
