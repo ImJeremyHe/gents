@@ -43,8 +43,8 @@ You should import `gents` in your Cargo.toml.
 
 ```toml
 [dev-dependencies]
-gents = "0.4"
-gents_derives = "0.4"
+gents = "0.10"
+gents_derives = "0.10"
 ```
 
 ```rust

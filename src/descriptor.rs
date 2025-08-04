@@ -9,7 +9,7 @@ use crate::utils::remove_ext;
 // `TS` trait defines the behavior of your types when generating files.
 // `TS` generates some helper functions for file generator.
 pub trait TS {
-    fn _register(manager: &mut DescriptorManager) -> usize;
+    fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize;
     // The name of this Rust type in Typescript.
     // u8 -> number
     // f64 -> number
@@ -30,6 +30,7 @@ pub struct DescriptorManager {
     pub descriptors: Vec<Descriptor>,
     pub id_map: HashMap<TypeId, usize>,
     tag_map: HashMap<usize, HashMap<String, HashSet<String>>>,
+    generics_map: HashMap<usize, String>,
 }
 
 impl DescriptorManager {
@@ -65,6 +66,10 @@ impl DescriptorManager {
         }
     }
 
+    pub fn add_generics_map(&mut self, idx: usize, generics: String) {
+        self.generics_map.insert(idx, generics);
+    }
+
     pub fn gen_data(self) -> Vec<(String, String)> {
         let mut result: Vec<(String, String)> = vec![];
         let descriptors = &self.descriptors;
@@ -73,7 +78,15 @@ impl DescriptorManager {
             .enumerate()
             .for_each(|(idx, descriptor)| match descriptor {
                 Descriptor::Interface(d) => {
+                    if d.generic.is_some() {
+                        return;
+                    }
                     let tag_map = self.tag_map.get(&idx).map(|v| v.iter().collect::<Vec<_>>());
+                    let generics = if let Some(v) = self.generics_map.get(&idx) {
+                        format!("<{}>", v).to_string()
+                    } else {
+                        String::new()
+                    };
                     let tag_content = {
                         if let Some(tag_map) = tag_map.clone() {
                             match tag_map.len() {
@@ -140,10 +153,11 @@ impl DescriptorManager {
                         });
                     let fields_string = fields_strings.join("\n");
                     let mut content = format!(
-                        "{}\n{}export interface {} {{\n{}{}\n}}\n",
+                        "{}\n{}export interface {}{} {{\n{}{}\n}}\n",
                         import_string,
                         comments,
                         d.ts_name.to_string(),
+                        generics,
                         tag_content,
                         fields_string
                     );
@@ -156,6 +170,9 @@ impl DescriptorManager {
                     result.push((d.file_name.to_string(), format(content)))
                 }
                 Descriptor::Enum(e) => {
+                    if e.generic.is_some() {
+                        return;
+                    }
                     let import_deps =
                         e.dependencies
                             .iter()
@@ -252,6 +269,7 @@ pub struct EnumDescriptor {
     pub ts_name: String,
     pub comments: Vec<String>,
     pub tag: String,
+    pub generic: Option<usize>,
 }
 
 /// Describe how to generate a ts interface.
@@ -264,6 +282,7 @@ pub struct InterfaceDescriptor {
     pub ts_name: String,
     pub comments: Vec<String>,
     pub need_builder: bool,
+    pub generic: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -278,7 +297,7 @@ pub struct FieldDescriptor {
 macro_rules! impl_builtin {
     ($i: ident, $l: literal, $t: literal) => {
         impl TS for $i {
-            fn _register(manager: &mut DescriptorManager) -> usize {
+            fn _register(manager: &mut DescriptorManager, _generic_base: bool) -> usize {
                 let type_id = TypeId::of::<$i>();
                 let descriptor = BuiltinTypeDescriptor {
                     ts_name: $l.to_string(),
@@ -311,8 +330,8 @@ impl_builtin!(String, "string", "string");
 impl_builtin!(bool, "boolean", "bool");
 
 impl<T: TS + 'static> TS for Vec<T> {
-    fn _register(manager: &mut DescriptorManager) -> usize {
-        let idx = T::_register(manager);
+    fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize {
+        let idx = T::_register(manager, generic_base);
         let type_id = TypeId::of::<Self>();
         let descriptor = GenericDescriptor {
             dependencies: vec![idx],
@@ -333,8 +352,8 @@ impl<T: TS + 'static> TS for Vec<T> {
 }
 
 impl<T: TS + 'static> TS for Option<T> {
-    fn _register(manager: &mut DescriptorManager) -> usize {
-        let idx = T::_register(manager);
+    fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize {
+        let idx = T::_register(manager, generic_base);
         let type_id = TypeId::of::<Self>();
         let descriptor = GenericDescriptor {
             dependencies: vec![idx],
@@ -354,9 +373,9 @@ impl<T: TS + 'static> TS for Option<T> {
 }
 
 impl<T: TS + 'static, E: TS + 'static> TS for Result<T, E> {
-    fn _register(manager: &mut DescriptorManager) -> usize {
-        let t_idx = T::_register(manager);
-        let e_idx = E::_register(manager);
+    fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize {
+        let t_idx = T::_register(manager, generic_base);
+        let e_idx = E::_register(manager, generic_base);
         let type_id = TypeId::of::<Self>();
         let descriptor = GenericDescriptor {
             dependencies: vec![t_idx, e_idx],
@@ -376,9 +395,9 @@ where
     K: TS + 'static,
     V: TS + 'static,
 {
-    fn _register(manager: &mut DescriptorManager) -> usize {
-        let k_dep = K::_register(manager);
-        let v_dep = V::_register(manager);
+    fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize {
+        let k_dep = K::_register(manager, generic_base);
+        let v_dep = V::_register(manager, generic_base);
         let descriptor = GenericDescriptor {
             dependencies: vec![k_dep, v_dep],
             ts_name: Self::_ts_name(),
@@ -398,9 +417,9 @@ where
     K: TS + 'static,
     V: TS + 'static,
 {
-    fn _register(manager: &mut DescriptorManager) -> usize {
-        let k_dep = K::_register(manager);
-        let v_dep = V::_register(manager);
+    fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize {
+        let k_dep = K::_register(manager, generic_base);
+        let v_dep = V::_register(manager, generic_base);
         let descriptor = GenericDescriptor {
             dependencies: vec![k_dep, v_dep],
             ts_name: Self::_ts_name(),
