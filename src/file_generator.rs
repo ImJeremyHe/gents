@@ -23,7 +23,7 @@ impl FileGroup {
 
     /// Add a TS member into this FileGroup.
     pub fn add<T: TS>(&mut self) {
-        T::_register(&mut self.manager);
+        T::_register(&mut self.manager, true);
     }
 
     pub fn gen_files(self, dir: &str, index_file: bool) {

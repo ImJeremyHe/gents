@@ -22,6 +22,7 @@ pub struct Container<'a> {
     pub ident: &'a Ident,
     pub comments: Vec<String>,
     pub need_builder: bool,
+    pub generics: Vec<&'a Ident>,
     pub tag: Option<String>,
 }
 
@@ -32,6 +33,15 @@ impl<'a> Container<'a> {
         let mut rename: Option<String> = None;
         let mut need_builder = false;
         let mut tag: Option<String> = None;
+        let generics = item
+            .generics
+            .params
+            .iter()
+            .filter_map(|p| match p {
+                syn::GenericParam::Type(ty_param) => Some(&ty_param.ident),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let comments = parse_comments(&item.attrs);
         for meta_item in item
             .attrs
@@ -89,6 +99,7 @@ impl<'a> Container<'a> {
                     rename,
                     comments,
                     need_builder,
+                    generics,
                     tag,
                 }
             }
@@ -111,6 +122,7 @@ impl<'a> Container<'a> {
                     comments,
                     need_builder,
                     tag,
+                    generics,
                 }
             }
             _ => panic!("gents does not support the union type currently, use struct instead"),

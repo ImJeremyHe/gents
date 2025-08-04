@@ -45,6 +45,7 @@ pub struct TestSkip {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use gents::*;
     use gents_derives::gents_header;
@@ -52,7 +53,7 @@ mod tests {
     #[test]
     fn gen_skip_test() {
         let mut manager = DescriptorManager::default();
-        TestSkip::_register(&mut manager);
+        TestSkip::_register(&mut manager, true);
         let (_, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(
             content.trim(),
@@ -66,7 +67,7 @@ mod tests {
     #[test]
     fn gen_data_person_test() {
         let mut manager = DescriptorManager::default();
-        Person::_register(&mut manager);
+        Person::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(file_name, "person.ts");
         assert_eq!(
@@ -81,7 +82,7 @@ mod tests {
     #[test]
     fn gen_data_group_test() {
         let mut manager = DescriptorManager::default();
-        Group::_register(&mut manager);
+        Group::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().last().unwrap();
         assert_eq!(file_name, "group.ts");
         assert_eq!(
@@ -103,7 +104,7 @@ export interface Group {
     #[test]
     fn gen_data_gender_test() {
         let mut manager = DescriptorManager::default();
-        Gender::_register(&mut manager);
+        Gender::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(file_name, "gender.ts");
         assert_eq!(
@@ -118,7 +119,7 @@ export interface Group {
     #[test]
     fn gen_data_pet_test() {
         let mut manager = DescriptorManager::default();
-        Pet::_register(&mut manager);
+        Pet::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(file_name, "pet.ts");
         assert_eq!(
@@ -146,7 +147,7 @@ export interface Group {
         }
 
         let mut manager = DescriptorManager::default();
-        StructWithComments::_register(&mut manager);
+        StructWithComments::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(file_name, "struct_with_comments.ts");
         assert_eq!(
@@ -171,7 +172,7 @@ export interface StructWithComments {
         }
 
         let mut manager = DescriptorManager::default();
-        File::_register(&mut manager);
+        File::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(file_name, "file.ts");
         assert_eq!(
@@ -193,7 +194,7 @@ export interface StructWithComments {
         }
 
         let mut manager = DescriptorManager::default();
-        A::_register(&mut manager);
+        A::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(file_name, "a.ts");
         assert_eq!(
@@ -236,7 +237,7 @@ export class ABuilder {
             Variant(Variant),
         }
         let mut manager = DescriptorManager::default();
-        TaggedEnum::_register(&mut manager);
+        TaggedEnum::_register(&mut manager, true);
         let (file_name, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(file_name, "a.ts");
         assert_eq!(
@@ -300,7 +301,7 @@ export class VariantBuilder {
         }
 
         let mut manager = DescriptorManager::default();
-        TaggedEnum::_register(&mut manager);
+        TaggedEnum::_register(&mut manager, true);
         manager.gen_data().into_iter().for_each(|(f, c)| {
             if f == "a.ts" {
                 assert_eq!(
@@ -381,6 +382,61 @@ export type TaggedEnum =
     }
 
     #[test]
+    fn test_generic() {
+        #[derive(TS)]
+        #[ts(file_name = "a.ts", rename_all = "camelCase")]
+        pub struct V1<T> {
+            pub f1: T,
+        }
+
+        let mut manager = DescriptorManager::default();
+        V1::<String>::_register(&mut manager, true);
+        let (_, content) = manager.gen_data().into_iter().next().unwrap();
+        assert_eq!(
+            content.trim(),
+            r#"export interface V1<T> {
+    f1: T
+}"#
+        );
+
+        #[derive(TS)]
+        #[ts(file_name = "b.ts", rename_all = "camelCase")]
+        pub struct V2<T> {
+            pub f1: V1<T>,
+            pub f2: T,
+        }
+        let mut manager = DescriptorManager::default();
+        V2::<String>::_register(&mut manager, true);
+        let (_, content) = manager.gen_data().into_iter().last().unwrap();
+        assert_eq!(
+            content.trim(),
+            r#"import { V1 } from './a'
+
+export interface V2<T> {
+    f1: V1<T>
+    f2: T
+}"#
+        );
+
+        #[derive(TS)]
+        #[ts(file_name = "c.ts", rename_all = "camelCase")]
+        pub struct V3 {
+            pub f1: V2<String>,
+        }
+        let mut manager = DescriptorManager::default();
+        V3::_register(&mut manager, true);
+        let (_, content) = manager.gen_data().into_iter().last().unwrap();
+        assert_eq!(
+            content.trim(),
+            r#"import { V2 } from './b'
+
+export interface V3 {
+    f1: V2<string>
+}"#,
+        );
+    }
+
+    #[test]
     fn test_multiple_tags() {
         #[derive(TS)]
         #[ts(file_name = "a.ts", rename_all = "camelCase")]
@@ -414,8 +470,8 @@ export type TaggedEnum =
         }
 
         let mut manager = DescriptorManager::default();
-        A::_register(&mut manager);
-        B::_register(&mut manager);
+        A::_register(&mut manager, true);
+        B::_register(&mut manager, true);
         let data = manager.gen_data();
         assert_eq!(data.len(), 4);
     }
@@ -428,7 +484,7 @@ export type TaggedEnum =
             pub f2: Result<String, u16>,
         }
         let mut manager = DescriptorManager::default();
-        TestStruct::_register(&mut manager);
+        TestStruct::_register(&mut manager, true);
         let (_, content) = manager.gen_data().into_iter().next().unwrap();
         assert_eq!(
             content.trim(),
