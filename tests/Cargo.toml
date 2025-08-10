@@ -8,6 +8,9 @@ gents = { path = "../" }
 gents_derives = { path = "../derives" }
 serde = { version = "1.0", features = ["derive"] }
 
+[dev-dependencies]
+serde_json = "1.0"
+
 [features]
 default = ["gents"]
 gents = []
