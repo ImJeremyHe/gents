@@ -4,5 +4,8 @@
     "@types/node": "^24.2.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
+  },
+  "scripts": {
+    "check": "npx tsc && node check.js"
   }
 }

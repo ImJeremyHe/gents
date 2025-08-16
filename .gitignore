@@ -3,6 +3,3 @@ Cargo.lock
 
 node_modules
 package-lock.json
-
-tests/**/*/data
-tests/src/serde_test/ts/check.ts
