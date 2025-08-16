@@ -1,0 +1,7 @@
+*.js
+*.json
+!package.json
+!tsconfig.json
+
+*.ts
+!index.ts

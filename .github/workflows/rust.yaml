@@ -11,6 +11,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - run: npm install
+        working-directory: tests/src/serde_test/ts
       - name: Build
         run: cargo build --verbose --workspace
       - name: Run tests
