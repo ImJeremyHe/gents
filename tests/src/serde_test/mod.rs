@@ -1,6 +1,5 @@
 use gents::FileGroup;
 use gents_derives::TS;
-use serde::{Deserialize, Serialize};
 use std::{fs, process::Command};
 
 const TS_TESTS_DIR: &str = "src/serde_test/ts";
@@ -25,14 +24,14 @@ console.log('✅ JSON successfully matches the {file_name} TypeScript interface'
 console.log('Example:', typedData)
 "#;
 
-#[derive(Serialize, Deserialize, TS)]
+#[derive(TS, Clone)]
 #[ts(file_name = "user.ts")]
 pub struct User {
     pub id: u32,
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, TS)]
+#[derive(TS, Clone)]
 #[ts(file_name = "test_enum.ts", rename_all = "camelCase", tag = "type")]
 pub enum TestEnum {
     Variant1(User),

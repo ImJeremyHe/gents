@@ -8,7 +8,10 @@ use crate::utils::remove_ext;
 
 // `TS` trait defines the behavior of your types when generating files.
 // `TS` generates some helper functions for file generator.
-pub trait TS {
+//
+// Currently we have a limit that the type must implement `Clone` trait. This is because
+// when serializing, we use dummy structs/enums to use the functionalities of `serde`
+pub trait TS: Clone {
     fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize;
     // The name of this Rust type in Typescript.
     // u8 -> number
@@ -29,32 +32,11 @@ pub trait TS {
 pub struct DescriptorManager {
     pub descriptors: Vec<Descriptor>,
     pub id_map: HashMap<TypeId, usize>,
-    tag_map: HashMap<usize, HashMap<String, HashSet<String>>>,
     generics_map: HashMap<usize, String>,
 }
 
 impl DescriptorManager {
     pub fn registry(&mut self, type_id: TypeId, descriptor: Descriptor) -> usize {
-        if let Descriptor::Enum(v) = &descriptor {
-            if !v.tag.is_empty() {
-                v.fields
-                    .iter()
-                    .zip(v.dependencies.iter())
-                    .for_each(|(fd, idx)| {
-                        let tag_value = if fd.tag_value.is_empty() {
-                            fd.ident.to_string()
-                        } else {
-                            fd.tag_value.clone()
-                        };
-                        self.tag_map
-                            .entry(*idx)
-                            .or_insert_with(HashMap::new)
-                            .entry(v.tag.clone())
-                            .or_insert_with(HashSet::new)
-                            .insert(format!("\"{}\"", tag_value));
-                    });
-            }
-        }
         match self.id_map.get(&type_id) {
             Some(idx) => *idx,
             None => {
@@ -81,37 +63,10 @@ impl DescriptorManager {
                     if d.generic.is_some() {
                         return;
                     }
-                    let tag_map = self.tag_map.get(&idx).map(|v| v.iter().collect::<Vec<_>>());
                     let generics = if let Some(v) = self.generics_map.get(&idx) {
                         format!("<{}>", v).to_string()
                     } else {
                         String::new()
-                    };
-                    let tag_content = {
-                        if let Some(tag_map) = tag_map.clone() {
-                            match tag_map.len() {
-                                0 => String::new(),
-                                1 => {
-                                    let (tag, values) = tag_map.iter().next().unwrap();
-                                    let values = hashset_to_vec(values);
-                                    format!("{}: {};", tag, values.join(" | "))
-                                }
-                                _ => {
-                                    let mut result = String::new();
-                                    for (tag, values) in tag_map {
-                                        let values = hashset_to_vec(values);
-                                        result.push_str(&format!(
-                                            "{}?: {};",
-                                            tag,
-                                            values.join(" | ")
-                                        ));
-                                    }
-                                    result
-                                }
-                            }
-                        } else {
-                            String::new()
-                        }
                     };
                     let import_deps =
                         d.dependencies
@@ -153,17 +108,16 @@ impl DescriptorManager {
                         });
                     let fields_string = fields_strings.join("\n");
                     let mut content = format!(
-                        "{}\n{}export interface {}{} {{\n{}{}\n}}\n",
+                        "{}\n{}export interface {}{} {{\n{}\n}}\n",
                         import_string,
                         comments,
                         d.ts_name.to_string(),
                         generics,
-                        tag_content,
                         fields_string
                     );
 
                     if d.need_builder {
-                        let builder_content = generate_builder(&d, tag_map.clone());
+                        let builder_content = generate_builder(&d);
                         content.push_str("\n");
                         content.push_str(&builder_content);
                     }
@@ -199,16 +153,11 @@ impl DescriptorManager {
 
                     let fields_strings =
                         e.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
-                            let ident = fd.ident.to_string();
                             let ty = fd.ts_ty.to_string();
                             let f = if ty != "" {
-                                if e.tag != "" {
-                                    format!(r#"{}"#, ty)
-                                } else {
-                                    format!("{{{}: {}}}", ident, ty)
-                                }
+                                format!("{{{}: \"{}\", value: {}}}", e.tag, fd.tag_value, ty)
                             } else {
-                                format!(r#"'{}'"#, ident)
+                                format!(r#"'{}'"#, fd.tag_value)
                             };
                             let f = format!("{}", f);
                             prev.push(f);
@@ -462,10 +411,7 @@ fn get_import_deps(all: &Vec<Descriptor>, idx: usize) -> (String, String) {
     }
 }
 
-fn generate_builder(
-    d: &InterfaceDescriptor,
-    tag_map: Option<Vec<(&String, &HashSet<String>)>>,
-) -> String {
+fn generate_builder(d: &InterfaceDescriptor) -> String {
     let field_initializers = d
         .fields
         .iter()
@@ -487,97 +433,6 @@ fn generate_builder(
             )
         })
         .collect::<Vec<_>>();
-    let (tag_initializers, tag_result) = {
-        if tag_map.is_none() {
-            ("".to_string(), "".to_string())
-        } else {
-            let tag_content = {
-                if let Some(tag_map) = tag_map.clone() {
-                    match tag_map.len() {
-                        0 => (String::new(), String::new()),
-                        1 => {
-                            let (tag, values) = tag_map.iter().next().unwrap();
-                            let values = hashset_to_vec(values);
-                            (
-                                format!(
-                                    "private _{} {} {};",
-                                    tag,
-                                    if values.len() <= 1 { "=" } else { "!:" },
-                                    values.join(" | ")
-                                ),
-                                format!("{}: this._{},", tag, tag),
-                            )
-                        }
-                        _ => {
-                            let mut result_content = String::new();
-                            let mut result = String::new();
-                            for (tag, values) in tag_map {
-                                let values = hashset_to_vec(values);
-                                result_content.push_str(&format!(
-                                    "private _{}?: {};",
-                                    tag,
-                                    values.join(" | ")
-                                ));
-                                result.push_str(&format!("{}: this._{},", tag, tag));
-                            }
-                            result_content.push_str("\n");
-                            result.push_str("\n");
-                            (result_content, result)
-                        }
-                    }
-                } else {
-                    (String::new(), String::new())
-                }
-            };
-            tag_content
-        }
-    };
-    let tag_setters = {
-        if tag_map.is_none() {
-            "".to_string()
-        } else {
-            let tag_map = tag_map.unwrap();
-            match tag_map.len() {
-                0 => "".to_string(),
-                1 => {
-                    let (tag, fields) = tag_map.get(0).unwrap();
-                    let fields = hashset_to_vec(fields);
-                    if fields.len() <= 1 {
-                        "".to_string()
-                    } else {
-                        format!(
-                            "public {}(v: {}) {{\n    this._{} = v\n    return this\n}}\n",
-                            tag,
-                            fields.join(" | "),
-                            tag,
-                        )
-                    }
-                }
-                _ => {
-                    let mut tag_setters = vec![];
-                    for (tag, fields) in tag_map {
-                        let fields = hashset_to_vec(fields);
-                        match fields.len() {
-                            0 => {}
-                            1 => tag_setters.push(format!(
-                                "public {}() {{\n    this._{} = {}\n    return this\n}}\n",
-                                tag,
-                                tag,
-                                fields.get(0).unwrap()
-                            )),
-                            _ => tag_setters.push(format!(
-                                "public {}(v: {}) {{\n    this._{} = v\n    return this\n}}\n",
-                                tag,
-                                fields.join(" | "),
-                                tag,
-                            )),
-                        }
-                    }
-                    tag_setters.join("\n    ")
-                }
-            }
-        }
-    };
     let build_func = {
         let field_validators = d
             .fields
@@ -596,19 +451,16 @@ fn generate_builder(
             .map(|fd| format!("{}: this._{},", fd.ident, fd.ident))
             .collect::<Vec<_>>();
         format!(
-            "public build() {{\n    {}\n    return {{{}{}}}\n}}\n",
+            "public build() {{\n    {}\n    return {{{}}}\n}}\n",
             field_validators.join("\n"),
-            tag_result,
             field_set.join("\n")
         )
     };
     format!(
-        "export class {}Builder {{\n    {}    {}    {}\n    {}\n    {}\n}}",
+        "export class {}Builder {{\n    {}    {}\n    {}\n}}",
         d.ts_name,
-        tag_initializers.trim(),
         field_initializers.join("\n    ").trim(),
         field_setters.join("\n    ").trim(),
-        tag_setters.trim(),
         build_func.trim(),
     )
 }
@@ -638,10 +490,4 @@ fn format(text: String) -> String {
     }
     let r = result.unwrap().unwrap();
     r
-}
-
-fn hashset_to_vec<T: Ord + Clone>(set: &HashSet<T>) -> Vec<T> {
-    let mut v = set.iter().map(|v| v.clone()).collect::<Vec<_>>();
-    v.sort();
-    v
 }

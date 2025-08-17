@@ -3,6 +3,7 @@ use proc_macro2::Span;
 use syn::{parse_macro_input, DeriveInput};
 mod case;
 mod container;
+mod serde_json;
 mod symbol;
 
 use container::{Container, RenameAll};
@@ -32,11 +33,17 @@ pub fn gents_header(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(TS, attributes(ts))]
 pub fn derive_ts(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    get_impl_block(input).into()
+    let container = Container::from_ast(&input);
+    let impl_block = get_impl_block(container.clone());
+    let serde = serde_json::get_serde_impl_block(container, &input);
+    quote! {
+        #impl_block
+        #serde
+    }
+    .into()
 }
 
-fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
-    let container = Container::from_ast(&input);
+fn get_impl_block(container: Container) -> proc_macro2::TokenStream {
     let file_name = container.file_name;
     let is_enum = container.is_enum;
     let rename_all = container.rename_all;
@@ -204,7 +211,7 @@ fn get_impl_block(input: DeriveInput) -> proc_macro2::TokenStream {
     } else {
         let generics_ts = container.generics.iter().map(|g| {
             quote! {
-                #g: ::gents::TS + 'static
+                #g: ::gents::TS + Clone + 'static
             }
         });
         let generics_idents = &container.generics;
@@ -233,6 +240,8 @@ fn get_generic_placeholder(
     );
     let ts_name = format!("{}", placeholder);
     quote! {
+        #[cfg(any(test, feature="gents"))]
+        #[derive(Clone)]
         #[cfg(any(test, feature="gents"))]
         struct #tag_ident;
         #[cfg(any(test, feature="gents"))]

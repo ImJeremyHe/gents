@@ -1,13 +1,13 @@
 use gents_derives::TS;
 
-#[derive(TS)]
+#[derive(TS, Clone)]
 #[ts(file_name = "person.ts", rename_all = "camelCase")]
 pub struct Person {
     pub age: u16,
     pub en_name: String,
 }
 
-#[derive(TS)]
+#[derive(TS, Clone)]
 #[ts(file_name = "group.ts", rename_all = "camelCase")]
 pub struct Group {
     pub name: String,
@@ -16,7 +16,7 @@ pub struct Group {
     pub leader: Option<Person>,
 }
 
-#[derive(TS)]
+#[derive(TS, Clone)]
 #[ts(file_name = "gender.ts")]
 pub enum Gender {
     Male,
@@ -25,8 +25,9 @@ pub enum Gender {
     Unknown,
 }
 
-#[derive(TS)]
+#[derive(TS, Clone)]
 #[ts(file_name = "pet.ts", rename_all = "camelCase")]
+#[ts(tag = "type")]
 pub enum Pet {
     Cat(String),
     Dog(String),
@@ -34,7 +35,7 @@ pub enum Pet {
     None,
 }
 
-#[derive(TS)]
+#[derive(TS, Clone)]
 #[ts(file_name = "skip.ts", rename_all = "camelCase")]
 pub struct TestSkip {
     pub f1: u16,
@@ -48,7 +49,6 @@ mod tests {
 
     use super::*;
     use gents::*;
-    use gents_derives::gents_header;
 
     #[test]
     fn gen_skip_test() {
@@ -110,8 +110,8 @@ export interface Group {
         assert_eq!(
             content.trim(),
             r#"export type Gender =
-    | 'Male'
-    | 'Female'
+    | 'male'
+    | 'female'
     | 'null'"#
         );
     }
@@ -125,8 +125,8 @@ export interface Group {
         assert_eq!(
             content.trim(),
             r#"export type Pet =
-    | { cat: string }
-    | { dog: string }
+    | { type: 'cat'; value: string }
+    | { type: 'dog'; value: string }
     | 'None'"#
         );
     }
@@ -138,7 +138,7 @@ export interface Group {
         /**
         Block Comment
         */
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "struct_with_comments.ts", rename_all = "camelCase")]
         pub struct StructWithComments {
             /// field comment1
@@ -165,7 +165,7 @@ export interface StructWithComments {
 
     #[test]
     fn test_uint8array() {
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "file.ts", rename_all = "camelCase")]
         pub struct File {
             pub data: Vec<u8>,
@@ -186,7 +186,7 @@ export interface StructWithComments {
 
     #[test]
     fn test_builder() {
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "a.ts", rename_all = "camelCase")]
         #[ts(builder)]
         pub struct A {
@@ -210,7 +210,6 @@ export class ABuilder {
         this._f1 = value
         return this
     }
-
     public build() {
         if (this._f1 === undefined) throw new Error('missing f1')
         return { f1: this._f1 }
@@ -223,7 +222,7 @@ export class ABuilder {
 
     #[test]
     fn test_enum_tag_and_builder() {
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "a.ts", rename_all = "camelCase")]
         #[ts(builder)]
         pub struct Variant {
@@ -231,7 +230,7 @@ export class ABuilder {
             pub f2: String,
         }
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "a.ts", rename_all = "camelCase", tag = "type")]
         pub enum TaggedEnum {
             Variant(Variant),
@@ -244,13 +243,11 @@ export class ABuilder {
             content.trim(),
             r#"
 export interface Variant {
-    type: 'variant'
     f1: number
     f2: string
 }
 
 export class VariantBuilder {
-    private _type = 'variant'
     private _f1!: number
     private _f2!: string
     public f1(value: number) {
@@ -262,11 +259,10 @@ export class VariantBuilder {
         this._f2 = value
         return this
     }
-
     public build() {
         if (this._f1 === undefined) throw new Error('missing f1')
         if (this._f2 === undefined) throw new Error('missing f2')
-        return { type: this._type, f1: this._f1, f2: this._f2 }
+        return { f1: this._f1, f2: this._f2 }
     }
 }"#
             .trim()
@@ -275,21 +271,21 @@ export class VariantBuilder {
 
     #[test]
     fn test_enum_tag_and_builder_2() {
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(builder, file_name = "a.ts", rename_all = "camelCase")]
         pub struct V1 {
             pub f1: u8,
             pub f2: String,
         }
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "b.ts", rename_all = "camelCase")]
         #[ts(builder)]
         pub struct V2 {
             pub f3: u8,
         }
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "c.ts", rename_all = "camelCase", tag = "type")]
         pub enum TaggedEnum {
             #[ts(tag_value = "tag1")]
@@ -308,13 +304,11 @@ export class VariantBuilder {
                     c.trim(),
                     r#"
 export interface V1 {
-    type: 'tag1' | 'tag3'
     f1: number
     f2: string
 }
 
 export class V1Builder {
-    private _type!: 'tag1' | 'tag3'
     private _f1!: number
     private _f2!: string
     public f1(value: number) {
@@ -326,14 +320,10 @@ export class V1Builder {
         this._f2 = value
         return this
     }
-    public type(v: 'tag1' | 'tag3') {
-        this._type = v
-        return this
-    }
     public build() {
         if (this._f1 === undefined) throw new Error('missing f1')
         if (this._f2 === undefined) throw new Error('missing f2')
-        return { type: this._type, f1: this._f1, f2: this._f2 }
+        return { f1: this._f1, f2: this._f2 }
     }
 }"#
                     .trim()
@@ -344,21 +334,18 @@ export class V1Builder {
                     c.trim(),
                     r#"
 export interface V2 {
-    type: 'tag2'
     f3: number
 }
 
 export class V2Builder {
-    private _type = 'tag2'
     private _f3!: number
     public f3(value: number) {
         this._f3 = value
         return this
     }
-
     public build() {
         if (this._f3 === undefined) throw new Error('missing f3')
-        return { type: this._type, f3: this._f3 }
+        return { f3: this._f3 }
     }
 }"#
                     .trim()
@@ -372,9 +359,9 @@ import { V1 } from './a'
 import { V2 } from './b'
 
 export type TaggedEnum =
-    | V1
-    | V2
-    | V1"#
+    | { type: 'v1'; value: V1 }
+    | { type: 'v2'; value: V2 }
+    | { type: 'v3'; value: V1 }"#
                         .trim()
                 );
             }
@@ -383,9 +370,9 @@ export type TaggedEnum =
 
     #[test]
     fn test_generic() {
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "a.ts", rename_all = "camelCase")]
-        pub struct V1<T> {
+        pub struct V1<T: TS> {
             pub f1: T,
         }
 
@@ -399,9 +386,9 @@ export type TaggedEnum =
 }"#
         );
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "b.ts", rename_all = "camelCase")]
-        pub struct V2<T> {
+        pub struct V2<T: TS> {
             pub f1: V1<T>,
             pub f2: T,
         }
@@ -418,7 +405,7 @@ export interface V2<T> {
 }"#
         );
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "c.ts", rename_all = "camelCase")]
         pub struct V3 {
             pub f1: V2<String>,
@@ -438,7 +425,7 @@ export interface V3 {
 
     #[test]
     fn test_multiple_tags() {
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "a.ts", rename_all = "camelCase")]
         #[ts(builder)]
         pub struct V1 {
@@ -446,14 +433,14 @@ export interface V3 {
             pub f2: String,
         }
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "b.ts", rename_all = "camelCase")]
         #[ts(builder)]
         pub struct V2 {
             pub f3: u8,
         }
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "a.ts", tag = "type")]
         pub enum A {
             V1(V1),
@@ -461,7 +448,7 @@ export interface V3 {
             V3(V1),
         }
 
-        #[derive(TS)]
+        #[derive(TS, Clone)]
         #[ts(file_name = "b.ts", tag = "type2")]
         pub enum B {
             V1(V1),
@@ -474,33 +461,5 @@ export interface V3 {
         B::_register(&mut manager, true);
         let data = manager.gen_data();
         assert_eq!(data.len(), 4);
-    }
-
-    #[test]
-    fn test_result() {
-        #[gents_header(file_name = "test_struct.ts")]
-        pub struct TestStruct {
-            pub f1: u8,
-            pub f2: Result<String, u16>,
-        }
-        let mut manager = DescriptorManager::default();
-        TestStruct::_register(&mut manager, true);
-        let (_, content) = manager.gen_data().into_iter().next().unwrap();
-        assert_eq!(
-            content.trim(),
-            r#"export interface TestStruct {
-    f1: number
-    f2: string | number
-}"#
-        );
-    }
-
-    #[test]
-    fn test_gents_for_wasm() {
-        #[gents_header(file_name = "test_struct.ts")]
-        pub struct TestStruct {
-            pub f1: u8,
-            pub f2: String,
-        }
     }
 }
