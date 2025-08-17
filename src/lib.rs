@@ -60,3 +60,5 @@ mod utils;
 
 pub use descriptor::*;
 pub use file_generator::*;
+
+pub use serde;

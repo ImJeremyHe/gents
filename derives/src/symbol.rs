@@ -10,7 +10,6 @@ pub const RENAME: Symbol = Symbol("rename");
 pub const FILE_NAME: Symbol = Symbol("file_name");
 pub const SKIP: Symbol = Symbol("skip");
 pub const BUILDER: Symbol = Symbol("builder");
-pub const TAG_VALUE: Symbol = Symbol("tag_value");
 pub const TAG: Symbol = Symbol("tag");
 
 impl PartialEq<Symbol> for Ident {

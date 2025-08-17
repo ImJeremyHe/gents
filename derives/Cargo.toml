@@ -1,6 +1,6 @@
 [package]
 name = "gents_derives"
-version = "0.10.0"
+version = "1.0.0"
 description = "provides some macros for gents"
 authors = ["ImJeremyHe<yiliang.he@qq.com>"]
 license = "MIT"

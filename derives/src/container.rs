@@ -7,12 +7,13 @@ use syn::Meta;
 use syn::MetaNameValue;
 use syn::Type;
 
+use crate::case::convert_camel_from_pascal;
 use crate::symbol::BUILDER;
 use crate::symbol::FILE_NAME;
 use crate::symbol::TAG;
-use crate::symbol::TAG_VALUE;
 use crate::symbol::{RENAME, RENAME_ALL, SKIP, TS};
 
+#[derive(Debug, Clone)]
 pub struct Container<'a> {
     pub file_name: String,
     pub is_enum: bool,
@@ -130,6 +131,7 @@ impl<'a> Container<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Field<'a> {
     pub rename: Option<String>,
     pub ident: &'a Ident,
@@ -164,13 +166,19 @@ impl<'a> Field<'a> {
             Some(f) => Some(&f.ty),
             None => None,
         };
+        let tag_value = if let Some(v) = attrs.tag_value {
+            Some(v)
+        } else {
+            let s = v.ident.to_string();
+            Some(convert_camel_from_pascal(s))
+        };
         Field {
             rename: attrs.rename,
             ident: &v.ident,
             ty,
             skip: attrs.skip,
             comments,
-            tag_value: attrs.tag_value,
+            tag_value,
         }
     }
 }
@@ -188,16 +196,13 @@ fn parse_attrs<'a>(attrs: &'a Vec<Attribute>) -> FieldAttrs {
         if m.path == RENAME {
             if let Ok(s) = get_lit_str(&m.value) {
                 rename = Some(s.value());
+                tag_value = Some(s.value());
             }
         } else if m.path == SKIP {
             if let Ok(s) = get_lit_bool(&m.value) {
                 skip = s;
             } else {
                 panic!("expected bool value in skip attr")
-            }
-        } else if m.path == TAG_VALUE {
-            if let Ok(s) = get_lit_str(&m.value) {
-                tag_value = Some(s.value());
             }
         }
     }
@@ -214,6 +219,7 @@ struct FieldAttrs {
     tag_value: Option<String>,
 }
 
+#[derive(Debug, Clone)]
 pub enum RenameAll {
     CamelCase,
 }
