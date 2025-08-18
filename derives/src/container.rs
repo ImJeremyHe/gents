@@ -13,7 +13,7 @@ use crate::symbol::FILE_NAME;
 use crate::symbol::TAG;
 use crate::symbol::{RENAME, RENAME_ALL, SKIP, TS};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Container<'a> {
     pub file_name: String,
     pub is_enum: bool,
@@ -131,7 +131,7 @@ impl<'a> Container<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Field<'a> {
     pub rename: Option<String>,
     pub ident: &'a Ident,
