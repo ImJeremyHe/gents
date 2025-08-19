@@ -2,7 +2,7 @@
 authors = ["ImJeremyHe<yiliang.he@qq.com>"]
 edition = "2018"
 name = "gents"
-version = "1.0.0"
+version = "1.0.1"
 license = "MIT"
 description = "generate Typescript interfaces from Rust code"
 repository = "https://github.com/ImJeremyHe/gents"
