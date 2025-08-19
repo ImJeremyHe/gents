@@ -61,7 +61,6 @@ fn get_serde_enum_impl_block(
         quote! {
             #[derive(::gents::serde::Serialize, ::gents::serde::Deserialize)]
             #[serde(rename_all = "camelCase")]
-            #[serde(untagged)]
             enum #unit_ident {
                 #(#fields)*
             }
