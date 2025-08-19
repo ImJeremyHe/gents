@@ -183,7 +183,7 @@ fn get_serde_enum_impl_block(
             .collect::<Vec<_>>();
         quote! {
             impl<#(#generic_ser_bound),*> ::gents::serde::Serialize for #ident<#(#generics),*> {
-                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
                     where S: ::gents::serde::Serializer
                 {
                     let dummy = match self {
@@ -195,7 +195,7 @@ fn get_serde_enum_impl_block(
             }
 
             impl<'de, #(#generic_de_bound),*> ::gents::serde::Deserialize<'de> for #ident<#(#generics),*> {
-                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
                     where D: ::gents::serde::Deserializer<'de>
                 {
                     let dummy = #dummy_ident::deserialize(deserializer)?;

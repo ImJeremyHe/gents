@@ -202,7 +202,6 @@ fn get_impl_block(container: Container) -> proc_macro2::TokenStream {
     };
     if container.generics.is_empty() {
         quote! {
-            #[cfg(any(test, feature="gents"))]
             impl ::gents::TS for #ident {
                 #register_func
                 #ts_name_func
@@ -220,7 +219,6 @@ fn get_impl_block(container: Container) -> proc_macro2::TokenStream {
             .map(|g| get_generic_placeholder(&ident, g));
         quote! {
             #(#placeholder_impls)*
-            #[cfg(any(test, feature="gents"))]
             impl<#(#generics_ts),*>
             ::gents::TS for #ident<#(#generics_idents),*>{
                 #register_func
@@ -240,11 +238,8 @@ fn get_generic_placeholder(
     );
     let ts_name = format!("{}", placeholder);
     quote! {
-        #[cfg(any(test, feature="gents"))]
         #[derive(Clone)]
-        #[cfg(any(test, feature="gents"))]
         struct #tag_ident;
-        #[cfg(any(test, feature="gents"))]
         impl ::gents::TS for #tag_ident {
             fn _register(manager: &mut ::gents::DescriptorManager, _generic_base: bool) -> usize {
                 let type_id = std::any::TypeId::of::<Self>();
