@@ -1,4 +1,4 @@
-use crate::container::Container;
+use crate::container::{Container, RenameAll};
 use quote::{format_ident, quote};
 use syn::{parse::Parser, DeriveInput};
 
@@ -23,6 +23,13 @@ fn get_serde_enum_impl_block(
     let generics = container.generics;
     let mut unit_variants = Vec::new();
     let mut non_unit_variants = Vec::new();
+    let rename_all = if let Some(rename_all) = &container.rename_all {
+        match rename_all {
+            RenameAll::CamelCase => quote! {#[serde(rename_all = "camelCase")]},
+        }
+    } else {
+        quote! {}
+    };
     container.fields.into_iter().for_each(|f| {
         if f.ty.is_none() {
             unit_variants.push(f);
@@ -130,7 +137,7 @@ fn get_serde_enum_impl_block(
         #non_unit_variant_dummy_enum
 
         #[derive(::gents::serde::Serialize, ::gents::serde::Deserialize)]
-        #[serde(rename_all = "camelCase")]
+        #rename_all
         #[serde(untagged)]
         enum #dummy_ident<#(#generics),*> {
             #dummy_unit_variant
@@ -222,6 +229,13 @@ fn get_serde_struct_impl_block(
     if container.is_enum {
         panic!("not support enum");
     }
+    let rename_all = if let Some(rename_all) = &container.rename_all {
+        match rename_all {
+            RenameAll::CamelCase => quote! {#[serde(rename_all = "camelCase")]},
+        }
+    } else {
+        quote! {}
+    };
     let mut dummy = derive_input.clone();
     dummy.attrs.clear();
     dummy.vis = syn::Visibility::Inherited;
@@ -290,7 +304,7 @@ fn get_serde_struct_impl_block(
 
     let dummy_type = quote! {
         #[derive(::gents::serde::Serialize, ::gents::serde::Deserialize)]
-        #[serde(rename_all = "camelCase")]
+        #rename_all
         #dummy
     };
 
