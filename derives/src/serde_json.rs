@@ -58,9 +58,18 @@ fn get_serde_enum_impl_block(
                 } else {
                     quote! {}
                 };
+                let default = if f.default.is_some() {
+                    let default = f.default.as_ref().unwrap();
+                    quote! {
+                        #[serde(default = #default)]
+                    }
+                } else {
+                    quote! {}
+                };
                 quote! {
                     #rename
                     #skip
+                    #default
                     #ident,
                 }
             })

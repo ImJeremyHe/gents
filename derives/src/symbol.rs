@@ -11,6 +11,7 @@ pub const FILE_NAME: Symbol = Symbol("file_name");
 pub const SKIP: Symbol = Symbol("skip");
 pub const BUILDER: Symbol = Symbol("builder");
 pub const TAG: Symbol = Symbol("tag");
+pub const DEFAULT: Symbol = Symbol("default");
 
 impl PartialEq<Symbol> for Ident {
     fn eq(&self, other: &Symbol) -> bool {

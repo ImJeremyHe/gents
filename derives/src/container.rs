@@ -9,6 +9,7 @@ use syn::Type;
 
 use crate::case::convert_camel_from_pascal;
 use crate::symbol::BUILDER;
+use crate::symbol::DEFAULT;
 use crate::symbol::FILE_NAME;
 use crate::symbol::TAG;
 use crate::symbol::{RENAME, RENAME_ALL, SKIP, TS};
@@ -139,6 +140,7 @@ pub struct Field<'a> {
     pub skip: bool,
     pub comments: Vec<String>,
     pub tag_value: Option<String>,
+    pub default: Option<String>,
 }
 
 impl<'a> Field<'a> {
@@ -152,6 +154,7 @@ impl<'a> Field<'a> {
             skip: attrs.skip,
             comments,
             tag_value: attrs.tag_value,
+            default: attrs.default,
         }
     }
 
@@ -179,6 +182,7 @@ impl<'a> Field<'a> {
             skip: attrs.skip,
             comments,
             tag_value,
+            default: attrs.default,
         }
     }
 }
@@ -187,6 +191,7 @@ fn parse_attrs<'a>(attrs: &'a Vec<Attribute>) -> FieldAttrs {
     let mut skip = false;
     let mut rename: Option<String> = None;
     let mut tag_value: Option<String> = None;
+    let mut default: Option<String> = None;
     for meta_item in attrs
         .iter()
         .flat_map(|attr| get_ts_meta_name_value_items(attr))
@@ -204,12 +209,19 @@ fn parse_attrs<'a>(attrs: &'a Vec<Attribute>) -> FieldAttrs {
             } else {
                 panic!("expected bool value in skip attr")
             }
+        } else if m.path == DEFAULT {
+            if let Ok(s) = get_lit_str(&m.value) {
+                default = Some(s.value());
+            }
+        } else {
+            panic!("unexpected attr")
         }
     }
     FieldAttrs {
         skip,
         rename,
         tag_value,
+        default,
     }
 }
 
@@ -217,6 +229,7 @@ struct FieldAttrs {
     skip: bool,
     rename: Option<String>,
     tag_value: Option<String>,
+    default: Option<String>,
 }
 
 #[derive(Debug, Clone)]
