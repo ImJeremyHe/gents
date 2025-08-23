@@ -288,11 +288,8 @@ export class VariantBuilder {
         #[derive(TS, Clone)]
         #[ts(file_name = "c.ts", rename_all = "camelCase", tag = "type")]
         pub enum TaggedEnum {
-            #[ts(tag_value = "tag1")]
             V1(V1),
-            #[ts(tag_value = "tag2")]
             V2(V2),
-            #[ts(tag_value = "tag3")]
             V3(V1),
         }
 
