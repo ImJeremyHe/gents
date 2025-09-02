@@ -36,6 +36,7 @@ pub struct User {
 pub enum TestEnum {
     Variant1(User),
     Variant2(User),
+    Variant3,
 }
 
 #[test]
@@ -74,6 +75,24 @@ fn test_ts_rust_json_compatibility_enum() {
         TestEnum::Variant1(_) => assert!(true),
         _ => assert!(false),
     }
+
+    let test_enum = TestEnum::Variant3;
+    let json = serde_json::to_string(&test_enum).unwrap();
+    fs::write(format!("{}/{}.json", JS_DIR, file_name), &json).unwrap();
+
+    let ts_file_content = CHECK_PATTERN
+        .replace("{file_name}", file_name)
+        .replace("{type_name}", type_name);
+    fs::write("src/serde_test/ts/check.ts", ts_file_content).unwrap();
+
+    let path = fs::canonicalize("src/serde_test/ts").unwrap();
+
+    let status = Command::new("npm")
+        .args(["run", "check"])
+        .current_dir(path)
+        .status()
+        .unwrap();
+    assert!(status.success(), "TypeScript failed to check types");
 }
 
 #[test]

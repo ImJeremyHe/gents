@@ -85,3 +85,33 @@ fn test_struct_tagged_enum_serde() {
         _ => panic!(),
     }
 }
+
+#[derive(Debug, Clone, gents_derives::TS)]
+#[ts(file_name = "b.ts", rename_all = "camelCase")]
+pub struct Pet {
+    pub name: String,
+    pub owner: Option<User>,
+}
+
+#[test]
+fn test_option_none_to_json() {
+    let pet = Pet {
+        name: "test".to_string(),
+        owner: None,
+    };
+    let json = serde_json::to_string(&pet).unwrap();
+    assert_eq!(json, "{\"name\":\"test\"}");
+
+    let pet = Pet {
+        name: "test".to_string(),
+        owner: Some(User {
+            id: 1,
+            name: "test".to_string(),
+        }),
+    };
+    let json = serde_json::to_string(&pet).unwrap();
+    assert_eq!(
+        json,
+        "{\"name\":\"test\",\"owner\":{\"id\":1,\"name\":\"test\"}}"
+    );
+}

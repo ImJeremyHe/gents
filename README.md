@@ -7,6 +7,7 @@
 It bridges the gap between Rust backends and TypeScript frontends by automatically generating type definitions, making it easy to use `serde-json` for communication between the two languages without manually maintaining duplicate type stubs.
 
 **Why use gents?**
+****
 
 - **Automatic type synchronization:** When your Rust data models change, you can instantly regenerate matching TypeScript interfaces, ensuring your frontend and backend always stay in sync.
 - **Eliminate manual boilerplate:** No need to hand-write or update TypeScript types every time your Rust structs or enums change, reducing human error and saving time.
@@ -23,7 +24,7 @@ This tool is designed for [LogiSheets](https://github.com/proclml/LogiSheets) an
 
 Your issues and PRs are welcome!
 
----
+****
 
 ## 🛠️ How to Use `gents` (Quickstart & Advanced)
 
@@ -65,7 +66,7 @@ You can use `rename_all` and `rename` for field naming policies.
 
 ### 3. Generate TypeScript Files
 
-Write a unit test (or integration test):
+Write a binary or unit test:
 
 ```rust
 #[ignore]
@@ -80,6 +81,8 @@ fn gents() {
 }
 ```
 
+Since `Group` has dependencies on `Person`, `gents` will automatically include `Person` in the generated files.
+
 - Run with `cargo test -- --ignored` to generate files.
 
 ### 4. Output Directory
@@ -87,17 +90,12 @@ fn gents() {
 - All generated `.ts` files will be placed in the directory you specify (e.g., `outdir`).
 - If you set the second argument of `gen_files` to `true`, an `index.ts` exporting all types will be generated.
 
-### 5. Cross-Crate Usage
-
-If your `TS` derives are spread across multiple crates, define a feature called `gents` in each crate and use `#[cfg(feature = "gents")]` to control code generation.
-See [LogiSheets example](https://github.com/proclml/LogiSheets/blob/master/crates/buildtools/src/generate.rs) for advanced multi-crate setup.
-
-### 6. Integration with Frontend
+### 5. Integration with Frontend
 
 - Add the generated `.ts` files to your frontend project (or link via a monorepo).
 - Now your TypeScript code can safely import and use the types generated from Rust, ensuring type consistency.
 
----
+****
 
 ## 💡 Advanced Tips
 
@@ -108,7 +106,7 @@ See [LogiSheets example](https://github.com/proclml/LogiSheets/blob/master/crate
 - **Use in CI:**
   You can run the generation test in your CI pipeline to ensure TypeScript types are always up to date.
 
----
+****
 
 ## Why not  `ts-rs`?
 
