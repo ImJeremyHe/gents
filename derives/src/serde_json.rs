@@ -312,6 +312,7 @@ fn get_serde_struct_impl_block(
     };
 
     let dummy_type = quote! {
+        #[::gents::serde_with::skip_serializing_none]
         #[derive(::gents::serde::Serialize, ::gents::serde::Deserialize)]
         #rename_all
         #dummy
