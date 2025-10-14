@@ -1,9 +1,9 @@
 use std::{
     any::TypeId,
     collections::{HashMap, HashSet},
-    path::Path,
 };
 
+use crate::ts_formatter::TsFormatter;
 use crate::utils::remove_ext;
 
 // `TS` trait defines the behavior of your types when generating files.
@@ -76,52 +76,32 @@ impl DescriptorManager {
                                 prev.extend(deps);
                                 prev
                             });
-                    let import_string = {
-                        let mut imports = import_deps.into_iter().fold(vec![], |mut prev, idx| {
-                            let (ts_name, file_name) = get_import_deps(&descriptors, idx);
-                            let s = format!("import {{{}}} from './{}'", ts_name, file_name);
-                            prev.push(s);
-                            prev
-                        });
-                        imports.sort();
-                        let mut result = imports.join("\n");
-                        if !imports.is_empty() {
-                            result.push_str("\n");
-                        }
-                        result
-                    };
-                    let comments = get_comment_string(&d.comments, false);
 
-                    let fields_strings =
-                        d.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
-                            let optional = if fd.optional {
-                                String::from("?")
-                            } else {
-                                String::from("")
-                            };
-                            let ident = fd.ident.to_string();
-                            let ty = fd.ts_ty.to_string();
-                            let c = get_comment_string(&fd.comments, true);
-                            let f = format!("{}    {}{}: {}", c, ident, optional, ty);
-                            prev.push(f);
-                            prev
-                        });
-                    let fields_string = fields_strings.join("\n");
-                    let mut content = format!(
-                        "{}\n{}export interface {}{} {{\n{}\n}}\n",
-                        import_string,
-                        comments,
-                        d.ts_name.to_string(),
-                        generics,
-                        fields_string
-                    );
+                    let mut fmt = TsFormatter::new();
+                    // imports
+                    {
+                        let mut deps: Vec<_> = import_deps.into_iter().collect();
+                        deps.sort();
+                        for dep in deps {
+                            let (ts_name, file_name) = get_import_deps(&descriptors, dep);
+                            fmt.add_import(&ts_name, &file_name);
+                        }
+                    }
+
+                    // comments and interface body
+                    fmt.add_comment(&d.comments);
+                    fmt.start_interface(&d.ts_name, &generics);
+                    for fd in &d.fields {
+                        fmt.add_field(&fd.ident, &fd.ts_ty, fd.optional, &fd.comments);
+                    }
+                    fmt.end_interface();
 
                     if d.need_builder {
-                        let builder_content = generate_builder(&d);
-                        content.push_str("\n");
-                        content.push_str(&builder_content);
+                        fmt.add_blank_line();
+                        write_builder(&d, &mut fmt);
                     }
-                    result.push((d.file_name.to_string(), format(content)))
+
+                    result.push((d.file_name.to_string(), fmt.to_string()))
                 }
                 Descriptor::Enum(e) => {
                     if e.generic.is_some() {
@@ -135,56 +115,36 @@ impl DescriptorManager {
                                 prev.extend(deps);
                                 prev
                             });
-                    let import_string = {
-                        let mut imports = import_deps.into_iter().fold(vec![], |mut prev, idx| {
-                            let (ts_name, file_name) = get_import_deps(&descriptors, idx);
-                            let s = format!("import {{{}}} from './{}'", ts_name, file_name);
-                            prev.push(s);
-                            prev
-                        });
-                        imports.sort();
-                        let mut result = imports.join("\n");
-                        if !imports.is_empty() {
-                            result.push_str("\n");
-                        }
-                        result
-                    };
-                    let comments = get_comment_string(&e.comments, false);
 
-                    let fields_strings =
-                        e.fields.iter().fold(Vec::<String>::new(), |mut prev, fd| {
-                            let ty = fd.ts_ty.to_string();
-                            let f = if ty != "" {
-                                format!("{{{}: \"{}\", value: {}}}", e.tag, fd.tag_value, ty)
-                            } else {
-                                format!(r#"'{}'"#, fd.tag_value)
-                            };
-                            let f = format!("{}", f);
-                            prev.push(f);
-                            prev
-                        });
-                    let fields_string = fields_strings.join("|\n    ");
-                    let ts_name = e.ts_name.to_string();
-                    let content = format!(
-                        "{import_string}\n{comments}export type {ts_name} =\n    {fields_string}\n",
-                    );
-                    result.push((e.file_name.to_string(), format(content)))
+                    let mut fmt = TsFormatter::new();
+                    // imports
+                    {
+                        let mut deps: Vec<_> = import_deps.into_iter().collect();
+                        deps.sort();
+                        for dep in deps {
+                            let (ts_name, file_name) = get_import_deps(&descriptors, dep);
+                            fmt.add_import(&ts_name, &file_name);
+                        }
+                    }
+                    // comments and type union
+                    fmt.add_comment(&e.comments);
+                    fmt.start_enum(&e.ts_name);
+                    for fd in &e.fields {
+                        let ty = fd.ts_ty.to_string();
+                        let v = if ty != "" {
+                            format!("{{ {}: '{}'; value: {} }}", e.tag, fd.tag_value, ty)
+                        } else {
+                            format!(r#"'{}'"#, fd.tag_value)
+                        };
+                        fmt.add_enum_variant_raw(&v);
+                    }
+                    fmt.end_enum();
+
+                    result.push((e.file_name.to_string(), fmt.to_string()))
                 }
                 _ => {}
             });
         result
-    }
-}
-
-fn get_comment_string(v: &[String], indent: bool) -> String {
-    if v.is_empty() {
-        String::from("")
-    } else {
-        if !indent {
-            format!("// {}\n", v.join("\n// "))
-        } else {
-            format!("    // {}\n", v.join("\n    // "))
-        }
     }
 }
 
@@ -411,83 +371,45 @@ fn get_import_deps(all: &Vec<Descriptor>, idx: usize) -> (String, String) {
     }
 }
 
-fn generate_builder(d: &InterfaceDescriptor) -> String {
-    let field_initializers = d
-        .fields
-        .iter()
-        .map(|fd| {
-            if fd.optional {
-                format!("private _{}?: {};", fd.ident, fd.ts_ty)
-            } else {
-                format!("private _{}!: {};", fd.ident, fd.ts_ty)
-            }
-        })
-        .collect::<Vec<_>>();
-    let field_setters = d
-        .fields
-        .iter()
-        .map(|fd| {
-            format!(
-                "public {}(value: {}) {{\n    this._{} = value\n    return this\n}}\n",
-                fd.ident, fd.ts_ty, fd.ident
-            )
-        })
-        .collect::<Vec<_>>();
-    let build_func = {
-        let field_validators = d
-            .fields
-            .iter()
-            .filter(|fd| !fd.optional)
-            .map(|fd| {
-                format!(
-                    "if (this._{} === undefined) {{ throw new Error('missing {}') }}",
-                    fd.ident, fd.ident
-                )
-            })
-            .collect::<Vec<_>>();
-        let field_set = d
-            .fields
-            .iter()
-            .map(|fd| format!("{}: this._{},", fd.ident, fd.ident))
-            .collect::<Vec<_>>();
-        format!(
-            "public build() {{\n    {}\n    return {{{}}}\n}}\n",
-            field_validators.join("\n"),
-            field_set.join("\n")
-        )
-    };
-    format!(
-        "export class {}Builder {{\n    {}    {}\n    {}\n}}",
-        d.ts_name,
-        field_initializers.join("\n    ").trim(),
-        field_setters.join("\n    ").trim(),
-        build_func.trim(),
-    )
-}
-
-fn format(text: String) -> String {
-    use dprint_plugin_typescript::configuration::*;
-    use dprint_plugin_typescript::*;
-    let config = ConfigurationBuilder::new()
-        .line_width(80)
-        .semi_colons(SemiColons::Asi)
-        .indent_width(4)
-        .prefer_single_line(false)
-        .quote_style(QuoteStyle::PreferSingle)
-        .trailing_commas(TrailingCommas::Never)
-        .member_expression_line_per_expression(true)
-        .build();
-    let result = format_text(FormatTextOptions {
-        path: Path::new("dummy.ts"),
-        extension: None,
-        text: text.clone(),
-        config: &config,
-        external_formatter: None,
-    });
-    if let Err(e) = result {
-        println!("{}", text);
-        panic!("Failed to format text: {}", e);
+fn write_builder(d: &InterfaceDescriptor, fmt: &mut TsFormatter) {
+    // class header
+    fmt.start_class(&format!("{}Builder", d.ts_name));
+    // fields
+    for fd in &d.fields {
+        if fd.optional {
+            fmt.add_class_field(&format!("private _{}?: {}", fd.ident, fd.ts_ty));
+        } else {
+            fmt.add_class_field(&format!("private _{}!: {}", fd.ident, fd.ts_ty));
+        }
     }
-    let r = result.unwrap().unwrap();
-    r
+    // setters with blank line between when multiple
+    let mut first = true;
+    for fd in &d.fields {
+        if !first {
+            fmt.add_blank_line();
+        }
+        first = false;
+        fmt.start_method(&format!("public {}(value: {})", fd.ident, fd.ts_ty));
+        fmt.add_method_line(&format!("this._{} = value", fd.ident));
+        fmt.add_method_line("return this");
+        fmt.end_method();
+    }
+    // build()
+    fmt.start_method("public build()");
+    for fd in d.fields.iter().filter(|fd| !fd.optional) {
+        fmt.add_method_line(&format!(
+            "if (this._{} === undefined) throw new Error('missing {}')",
+            fd.ident, fd.ident
+        ));
+    }
+    let field_set = d
+        .fields
+        .iter()
+        .map(|fd| format!("{}: this._{}", fd.ident, fd.ident))
+        .collect::<Vec<_>>()
+        .join(", ");
+    fmt.add_method_line(&format!("return {{ {} }}", field_set));
+    fmt.end_method();
+    // class end
+    fmt.end_class();
 }

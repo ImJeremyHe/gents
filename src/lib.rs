@@ -56,6 +56,7 @@
 
 mod descriptor;
 mod file_generator;
+mod ts_formatter;
 mod utils;
 
 pub use descriptor::*;
