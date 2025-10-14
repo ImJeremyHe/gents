@@ -93,6 +93,17 @@ pub struct Pet {
     pub owner: Option<User>,
 }
 
+#[derive(Debug, Clone, gents_derives::TS)]
+#[ts(file_name = "data_area.ts", rename_all = "camelCase")]
+pub struct DataArea {
+    pub start_row: usize,
+    pub start_col: usize,
+    // Optional end row and column, if not specified,
+    // the data area extends to the end of the craft
+    pub end_row: Option<usize>,
+    pub end_col: Option<usize>,
+}
+
 #[test]
 fn test_option_none_to_json() {
     let pet = Pet {
@@ -114,4 +125,19 @@ fn test_option_none_to_json() {
         json,
         "{\"name\":\"test\",\"owner\":{\"id\":1,\"name\":\"test\"}}"
     );
+
+    let data_area = DataArea {
+        start_row: 0,
+        start_col: 0,
+        end_row: None,
+        end_col: None,
+    };
+    let json = serde_json::to_string(&data_area).unwrap();
+    assert_eq!(json, "{\"startRow\":0,\"startCol\":0}");
+
+    let json_obj = serde_json::from_str::<DataArea>(&json).unwrap();
+    assert_eq!(json_obj.start_row, 0);
+    assert_eq!(json_obj.start_col, 0);
+    assert!(json_obj.end_row.is_none());
+    assert!(json_obj.end_col.is_none());
 }
