@@ -63,6 +63,16 @@ impl TsFormatter {
         }
     }
 
+    pub fn add_method(&mut self, name: &str, params: Vec<(String, String)>, ret: Option<String>) {
+        let param_str = params
+            .iter()
+            .map(|(n, t)| format!("{}: {}", n, t))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let ret_str = ret.map_or("void".to_string(), |r| r);
+        self.write_line(&format!("{}({}): {};", name, param_str, ret_str));
+    }
+
     pub fn end_interface(&mut self) {
         if self.indent > 0 {
             self.indent -= 1;
@@ -128,7 +138,7 @@ impl TsFormatter {
         }
     }
 
-    pub fn to_string(self) -> String {
+    pub fn end_file(self) -> String {
         let mut out = String::new();
         if !self.imports.is_empty() {
             for i in &self.imports {

@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::{fs, io::Write};
 
+use crate::_TsAPI;
 use crate::descriptor::{DescriptorManager, TS};
 use crate::utils::remove_ext;
 
@@ -24,6 +25,11 @@ impl FileGroup {
     /// Add a TS member into this FileGroup.
     pub fn add<T: TS>(&mut self) {
         T::_register(&mut self.manager, true);
+    }
+
+    pub fn add_api<T: _TsAPI>(&mut self) {
+        let d = T::__get_api_descriptor();
+        self.manager.add_api_descriptor(d);
     }
 
     pub fn gen_files(self, dir: &str, index_file: bool) {

@@ -460,3 +460,57 @@ export interface V3 {
         assert_eq!(data.len(), 4);
     }
 }
+
+#[cfg(test)]
+mod test_api {
+    use gents::*;
+    use gents_derives::{TS, ts_interface};
+
+    #[derive(TS, Clone)]
+    #[ts(file_name = "a.ts", rename_all = "camelCase")]
+    pub struct V1 {
+        pub f1: u8,
+        pub f2: String,
+    }
+
+    /// API
+    #[ts_interface(file_name = "v1_api.ts", ident = "V1Api")]
+    impl V1 {
+        pub fn f1(&self) -> u8 {
+            self.f1
+        }
+
+        pub fn f2(&self) -> &str {
+            &self.f2
+        }
+
+        /// set f1
+        pub fn set_f1(&mut self, f1: u8) {
+            self.f1 = f1;
+        }
+
+        pub fn set_f2(&mut self, f2: String) {
+            self.f2 = f2;
+        }
+    }
+
+    #[test]
+    fn test_v1_api() {
+        let mut manager = DescriptorManager::default();
+        V1::_register(&mut manager, true);
+        manager.add_api_descriptor(V1::__get_api_descriptor());
+        let data = manager.gen_data();
+        assert_eq!(data.len(), 2);
+        let files: std::collections::HashMap<&str, &str> = data
+            .iter()
+            .map(|(name, content)| (name.as_str(), content.as_str()))
+            .collect();
+        assert!(files.contains_key("a.ts"));
+        assert!(files.contains_key("v1_api.ts"));
+
+        assert_eq!(
+            files.get("v1_api.ts").unwrap(),
+            &"export interface V1Api {\n    f1(): number;\n    f2(): string;\n    setF1(f1: number): void;\n    setF2(f2: string): void;\n}\n"
+        );
+    }
+}

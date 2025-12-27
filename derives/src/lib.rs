@@ -5,6 +5,7 @@ mod case;
 mod container;
 mod serde_json;
 mod symbol;
+mod ts_interface;
 
 use container::{Container, RenameAll};
 use proc_macro::TokenStream;
@@ -253,4 +254,9 @@ fn get_generic_placeholder(
             }
         }
     }
+}
+
+#[proc_macro_attribute]
+pub fn ts_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
+    ts_interface::ts_interface(attr, item)
 }
