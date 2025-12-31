@@ -40,6 +40,7 @@ pub struct ApiDescriptor {
     pub file_name: String,
     pub methods: Vec<MethodDescriptor>,
     pub comment: Vec<String>,
+    pub async_func: bool,
 }
 
 pub struct MethodDescriptor {
@@ -203,6 +204,7 @@ impl DescriptorManager {
                 let (ts_name, file_name) = get_import_deps(&descriptors, idx);
                 fmt.add_import(&ts_name, &file_name);
             });
+            let async_func = api.async_func;
 
             // For API files we currently do not emit comments into the generated TS,
             // so that the output matches the expected test fixtures exactly.
@@ -223,7 +225,12 @@ impl DescriptorManager {
                     let desc = descriptors.get(*idx).unwrap();
                     desc.ts_name().to_string()
                 });
-                fmt.add_method(&m.name, params, ret);
+                fmt.add_comment(&m.comment);
+                if async_func {
+                    fmt.add_async_method(&m.name, params, ret);
+                } else {
+                    fmt.add_method(&m.name, params, ret);
+                }
             });
             fmt.end_interface();
             result.push((api.file_name.to_string(), fmt.end_file()));
