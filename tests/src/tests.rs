@@ -510,7 +510,7 @@ mod test_api {
 
         assert_eq!(
             files.get("v1_api.ts").unwrap(),
-            &"export interface V1Api {\n    f1(): number;\n    f2(): string;\n    setF1(f1: number): void;\n    setF2(f2: string): void;\n}\n"
+            &"export interface V1Api {\n    f1(): number;\n    f2(): string;\n    // set f1\n    setF1(f1: number): void;\n    setF2(f2: string): void;\n}\n"
         );
     }
 }

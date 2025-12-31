@@ -73,6 +73,24 @@ impl TsFormatter {
         self.write_line(&format!("{}({}): {};", name, param_str, ret_str));
     }
 
+    pub fn add_async_method(
+        &mut self,
+        name: &str,
+        params: Vec<(String, String)>,
+        ret: Option<String>,
+    ) {
+        let param_str = params
+            .iter()
+            .map(|(n, t)| format!("{}: {}", n, t))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let ret_str = ret.map_or("void".to_string(), |r| r);
+        self.write_line(&format!(
+            "async {}({}): Promise<{}>;",
+            name, param_str, ret_str
+        ));
+    }
+
     pub fn end_interface(&mut self) {
         if self.indent > 0 {
             self.indent -= 1;

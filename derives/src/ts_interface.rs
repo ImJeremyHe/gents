@@ -21,12 +21,14 @@ pub fn ts_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 struct TsInterfaceArgs {
     file_name: String,
     ident: Option<String>,
+    async_func: bool,
 }
 
 impl Parse for TsInterfaceArgs {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut file_name: Option<String> = None;
         let mut ident_val: Option<String> = None;
+        let mut async_func: bool = false;
 
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
@@ -37,10 +39,12 @@ impl Parse for TsInterfaceArgs {
                 file_name = Some(lit.value());
             } else if ident == "ident" {
                 ident_val = Some(lit.value());
+            } else if ident == "async" {
+                async_func = lit.value() == "true";
             } else {
                 return Err(Error::new_spanned(
                     ident,
-                    "expected `file_name = \"...\"` or `ident = \"...\"`",
+                    "expected `file_name = \"...\"` or `ident = \"...\"` or `async = \"true|false\"`",
                 ));
             }
 
@@ -56,6 +60,7 @@ impl Parse for TsInterfaceArgs {
         Ok(Self {
             file_name,
             ident: ident_val,
+            async_func,
         })
     }
 }
@@ -78,16 +83,10 @@ fn expand_ts_interface(
     // prefer user-specified ident if provided, otherwise fall back to Rust type name
     let type_name = args.ident.unwrap_or_else(|| self_ty_ident.to_string());
     let file_name = args.file_name;
+    let async_func = args.async_func;
 
-    // Collect impl-level doc comments
-    let mut impl_comments = Vec::new();
-    for attr in &impl_block.attrs {
-        if attr.path().is_ident("doc") {
-            if let Ok(lit) = attr.parse_args::<LitStr>() {
-                impl_comments.push(lit.value());
-            }
-        }
-    }
+    let impl_comments = Vec::<String>::new();
+    // TODO: collect impl-level doc comments
 
     // Collect public methods
     let mut method_tokens = Vec::new();
@@ -113,6 +112,7 @@ fn expand_ts_interface(
                     file_name: #file_name.to_string(),
                     methods: vec![ #(#method_tokens),* ],
                     comment: vec![ #( #impl_comments.to_string() ),* ],
+                    async_func: #async_func,
                 }
             }
         }
@@ -136,16 +136,33 @@ fn extract_self_type_ident(ty: &Type) -> Result<&Ident> {
     }
 }
 
+fn extract_doc(attr: &syn::Attribute) -> Option<String> {
+    if !attr.path().is_ident("doc") {
+        return None;
+    }
+
+    match &attr.meta {
+        syn::Meta::NameValue(nv) => {
+            if let syn::Expr::Lit(expr_lit) = &nv.value {
+                if let syn::Lit::Str(lit_str) = &expr_lit.lit {
+                    return Some(lit_str.value());
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 fn expand_method(func: &ImplItemFn) -> Result<proc_macro2::TokenStream> {
     let name = convert_camel_from_snake(func.sig.ident.to_string());
 
     // Collect method-level doc comments
     let mut comments = Vec::new();
     for attr in &func.attrs {
-        if attr.path().is_ident("doc") {
-            if let Ok(lit) = attr.parse_args::<LitStr>() {
-                comments.push(lit.value());
-            }
+        if let Some(doc) = extract_doc(attr) {
+            let d = doc.trim_start().to_string();
+            comments.push(d);
         }
     }
 
