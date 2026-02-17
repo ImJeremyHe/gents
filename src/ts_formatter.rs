@@ -91,6 +91,15 @@ impl TsFormatter {
         ));
     }
 
+    pub fn add_rpc_method(&mut self, name: &str, params: Vec<(String, String)>, ret_type: &str) {
+        let param_str = params
+            .iter()
+            .map(|(n, t)| format!("{}: {}", n, t))
+            .collect::<Vec<_>>()
+            .join(", ");
+        self.write_line(&format!("{}({}): Promise<{}>;", name, param_str, ret_type));
+    }
+
     pub fn end_interface(&mut self) {
         if self.indent > 0 {
             self.indent -= 1;

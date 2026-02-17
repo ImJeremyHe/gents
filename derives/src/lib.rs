@@ -3,6 +3,7 @@ use proc_macro2::Span;
 use syn::{parse_macro_input, DeriveInput};
 mod case;
 mod container;
+mod rpc_interface;
 mod serde_json;
 mod symbol;
 mod ts_interface;
@@ -259,4 +260,9 @@ fn get_generic_placeholder(
 #[proc_macro_attribute]
 pub fn ts_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     ts_interface::ts_interface(attr, item)
+}
+
+#[proc_macro_derive(Interface, attributes(ts))]
+pub fn derive_interface(input: TokenStream) -> TokenStream {
+    rpc_interface::derive_interface(input)
 }
