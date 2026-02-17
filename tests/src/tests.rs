@@ -462,6 +462,103 @@ export interface V3 {
 }
 
 #[cfg(test)]
+mod test_rpc_interface {
+    use gents::*;
+    use gents_derives::{Interface, TS};
+
+    #[derive(TS, Clone)]
+    #[ts(file_name = "get_cell_params.ts", rename_all = "camelCase")]
+    pub struct GetCellParams {
+        pub row: u32,
+        pub col: u32,
+    }
+
+    #[derive(TS, Clone)]
+    #[ts(file_name = "cell_info.ts", rename_all = "camelCase")]
+    pub struct CellInfo {
+        pub value: String,
+    }
+
+    #[derive(TS, Clone)]
+    #[ts(file_name = "save_params.ts", rename_all = "camelCase")]
+    pub struct SaveParams {
+        pub path: String,
+    }
+
+    #[derive(TS, Clone)]
+    #[ts(file_name = "save_result.ts", rename_all = "camelCase")]
+    pub struct SaveResult {
+        pub success: bool,
+    }
+
+    #[derive(TS, Clone)]
+    #[ts(file_name = "error_message.ts", rename_all = "camelCase")]
+    pub struct ErrorMessage {
+        pub message: String,
+    }
+
+    // Without rename_all: keeps original snake_case names
+    #[derive(Interface)]
+    #[ts(file_name = "workbook_methods.ts")]
+    pub struct WorkbookMethods {
+        pub get_cell: fn(row_idx: u32, col_idx: u32) -> Result<CellInfo, ErrorMessage>,
+        pub save_file: fn(file_path: String) -> Result<SaveResult, ErrorMessage>,
+    }
+
+    // With rename_all = "camelCase": converts to camelCase
+    #[derive(Interface)]
+    #[ts(file_name = "workbook_methods_camel.ts", rename_all = "camelCase")]
+    pub struct WorkbookMethodsCamel {
+        pub get_cell: fn(row_idx: u32, col_idx: u32) -> Result<CellInfo, ErrorMessage>,
+        pub save_file: fn(file_path: String) -> Result<SaveResult, ErrorMessage>,
+    }
+
+    #[test]
+    fn test_rpc_interface_no_rename() {
+        let mut manager = DescriptorManager::default();
+        let desc = WorkbookMethods::__get_rpc_descriptor(&mut manager);
+        manager.add_rpc_descriptor(desc);
+
+        let data = manager.gen_data();
+        let files: std::collections::HashMap<&str, &str> = data
+            .iter()
+            .map(|(name, content)| (name.as_str(), content.as_str()))
+            .collect();
+
+        let content = files.get("workbook_methods.ts").unwrap();
+        // Without rename_all: keeps snake_case
+        assert!(content.contains(
+            "get_cell(row_idx: number, col_idx: number): Promise<CellInfo | ErrorMessage>;"
+        ));
+        assert!(
+            content.contains("save_file(file_path: string): Promise<SaveResult | ErrorMessage>;")
+        );
+    }
+
+    #[test]
+    fn test_rpc_interface_with_rename_all() {
+        let mut manager = DescriptorManager::default();
+        let desc = WorkbookMethodsCamel::__get_rpc_descriptor(&mut manager);
+        manager.add_rpc_descriptor(desc);
+
+        let data = manager.gen_data();
+        let files: std::collections::HashMap<&str, &str> = data
+            .iter()
+            .map(|(name, content)| (name.as_str(), content.as_str()))
+            .collect();
+
+        let content = files.get("workbook_methods_camel.ts").unwrap();
+        // With rename_all = "camelCase": converts to camelCase
+        assert!(content.contains(
+            "getCell(rowIdx: number, colIdx: number): Promise<CellInfo | ErrorMessage>;"
+        ));
+        assert!(
+            content.contains("saveFile(filePath: string): Promise<SaveResult | ErrorMessage>;")
+        );
+    }
+}
+
+#[cfg(test)]
 mod test_api {
     use gents::*;
     use gents_derives::{TS, ts_interface};

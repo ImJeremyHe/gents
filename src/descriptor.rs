@@ -35,6 +35,12 @@ pub trait _TsAPI {
     fn __get_api_descriptor() -> ApiDescriptor;
 }
 
+/// Trait for defining TypeScript RPC interfaces from struct with function fields.
+/// Use `#[derive(Interface)]` to implement this trait.
+pub trait _TsRpcInterface {
+    fn __get_rpc_descriptor(manager: &mut DescriptorManager) -> RpcInterfaceDescriptor;
+}
+
 pub struct ApiDescriptor {
     pub name: String,
     pub file_name: String,
@@ -50,10 +56,26 @@ pub struct MethodDescriptor {
     pub return_type: Option<TypeId>,
 }
 
+/// Descriptor for RPC interface generated from `#[derive(Interface)]`
+pub struct RpcInterfaceDescriptor {
+    pub name: String,
+    pub file_name: String,
+    pub methods: Vec<RpcMethodDescriptor>,
+}
+
+/// Descriptor for a single RPC method: `fn(param1: T1, param2: T2) -> Result<T, E>`
+pub struct RpcMethodDescriptor {
+    pub name: String,
+    pub params: Vec<(String, TypeId)>,
+    pub ok_type: TypeId,
+    pub err_type: TypeId,
+}
+
 #[derive(Default)]
 pub struct DescriptorManager {
     pub descriptors: Vec<Descriptor>,
     pub api_descriptors: Vec<ApiDescriptor>,
+    pub rpc_descriptors: Vec<RpcInterfaceDescriptor>,
     pub id_map: HashMap<TypeId, usize>,
     generics_map: HashMap<usize, String>,
 }
@@ -76,6 +98,10 @@ impl DescriptorManager {
         self.api_descriptors.push(descriptor);
     }
 
+    pub fn add_rpc_descriptor(&mut self, descriptor: RpcInterfaceDescriptor) {
+        self.rpc_descriptors.push(descriptor);
+    }
+
     pub fn add_generics_map(&mut self, idx: usize, generics: String) {
         self.generics_map.insert(idx, generics);
     }
@@ -85,6 +111,7 @@ impl DescriptorManager {
         let DescriptorManager {
             descriptors,
             api_descriptors,
+            rpc_descriptors,
             id_map,
             generics_map,
         } = self;
@@ -235,6 +262,77 @@ impl DescriptorManager {
             fmt.end_interface();
             result.push((api.file_name.to_string(), fmt.end_file()));
         });
+
+        // Generate RPC interface files
+        rpc_descriptors.into_iter().for_each(|rpc| {
+            let mut fmt = TsFormatter::new();
+
+            // Collect all type dependencies for imports
+            for m in &rpc.methods {
+                for (_, type_id) in &m.params {
+                    if let Some(&idx) = id_map.get(type_id) {
+                        let desc = descriptors.get(idx).unwrap();
+                        if let Descriptor::BuiltinType(_) = desc {
+                            continue;
+                        }
+                        let import_deps = get_import_deps_idx(&descriptors, idx);
+                        for dep in import_deps {
+                            let (ts_name, file_name) = get_import_deps(&descriptors, dep);
+                            fmt.add_import(&ts_name, &file_name);
+                        }
+                    }
+                }
+                for type_id in [m.ok_type, m.err_type] {
+                    if let Some(&idx) = id_map.get(&type_id) {
+                        let desc = descriptors.get(idx).unwrap();
+                        if let Descriptor::BuiltinType(_) = desc {
+                            continue;
+                        }
+                        let import_deps = get_import_deps_idx(&descriptors, idx);
+                        for dep in import_deps {
+                            let (ts_name, file_name) = get_import_deps(&descriptors, dep);
+                            fmt.add_import(&ts_name, &file_name);
+                        }
+                    }
+                }
+            }
+
+            fmt.start_interface(&rpc.name, "");
+
+            for m in rpc.methods {
+                let params: Vec<(String, String)> = m
+                    .params
+                    .iter()
+                    .map(|(name, type_id)| {
+                        let ts_type = id_map
+                            .get(type_id)
+                            .and_then(|idx| descriptors.get(*idx))
+                            .map(|d| d.ts_name().to_string())
+                            .unwrap_or_else(|| "unknown".to_string());
+                        (name.clone(), ts_type)
+                    })
+                    .collect();
+
+                let ok_ts = id_map
+                    .get(&m.ok_type)
+                    .and_then(|idx| descriptors.get(*idx))
+                    .map(|d| d.ts_name().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+
+                let err_ts = id_map
+                    .get(&m.err_type)
+                    .and_then(|idx| descriptors.get(*idx))
+                    .map(|d| d.ts_name().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+
+                let ret_type = format!("{} | {}", ok_ts, err_ts);
+                fmt.add_rpc_method(&m.name, params, &ret_type);
+            }
+
+            fmt.end_interface();
+            result.push((rpc.file_name.to_string(), fmt.end_file()));
+        });
+
         result
     }
 }

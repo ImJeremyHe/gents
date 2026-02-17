@@ -2,6 +2,7 @@ use std::path::Path;
 use std::{fs, io::Write};
 
 use crate::_TsAPI;
+use crate::_TsRpcInterface;
 use crate::descriptor::{DescriptorManager, TS};
 use crate::utils::remove_ext;
 
@@ -30,6 +31,11 @@ impl FileGroup {
     pub fn add_api<T: _TsAPI>(&mut self) {
         let d = T::__get_api_descriptor();
         self.manager.add_api_descriptor(d);
+    }
+
+    pub fn add_rpc<T: _TsRpcInterface>(&mut self) {
+        let d = T::__get_rpc_descriptor(&mut self.manager);
+        self.manager.add_rpc_descriptor(d);
     }
 
     pub fn gen_files(self, dir: &str, index_file: bool) {
