@@ -456,6 +456,20 @@ impl_builtin!(f64, "number", "f64");
 impl_builtin!(String, "string", "string");
 impl_builtin!(bool, "boolean", "bool");
 
+impl TS for () {
+    fn _register(manager: &mut DescriptorManager, _generic_base: bool) -> usize {
+        let type_id = TypeId::of::<()>();
+        let descriptor = BuiltinTypeDescriptor {
+            ts_name: "void".to_string(),
+        };
+        manager.registry(type_id, Descriptor::BuiltinType(descriptor))
+    }
+
+    fn _ts_name() -> String {
+        "void".to_string()
+    }
+}
+
 impl<T: TS + 'static> TS for Vec<T> {
     fn _register(manager: &mut DescriptorManager, generic_base: bool) -> usize {
         let idx = T::_register(manager, generic_base);
