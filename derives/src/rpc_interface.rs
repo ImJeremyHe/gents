@@ -63,14 +63,14 @@ impl Parse for InterfaceAttrs {
 struct RpcParam {
     name: String,
     ty: Type,
+    optional: bool,
 }
 
 /// Represents a parsed RPC method field
 struct RpcMethod {
     name: String,
     params: Vec<RpcParam>,
-    ok_type: Type,
-    err_type: Type,
+    ret_type: Type,
 }
 
 pub fn derive_interface(input: TokenStream) -> TokenStream {
@@ -129,8 +129,7 @@ fn expand_interface(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
         .iter()
         .map(|m| {
             let name = &m.name;
-            let ok_ty = &m.ok_type;
-            let err_ty = &m.err_type;
+            let ret_ty = &m.ret_type;
 
             let param_tokens: Vec<_> = m
                 .params
@@ -138,8 +137,13 @@ fn expand_interface(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
                 .map(|p| {
                     let param_name = &p.name;
                     let param_ty = &p.ty;
+                    let optional = p.optional;
                     quote! {
-                        (#param_name.to_string(), std::any::TypeId::of::<#param_ty>())
+                        ::gents::RpcParamDescriptor {
+                            name: #param_name.to_string(),
+                            type_id: std::any::TypeId::of::<#param_ty>(),
+                            optional: #optional,
+                        }
                     }
                 })
                 .collect();
@@ -148,8 +152,7 @@ fn expand_interface(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
                 ::gents::RpcMethodDescriptor {
                     name: #name.to_string(),
                     params: vec![ #(#param_tokens),* ],
-                    ok_type: std::any::TypeId::of::<#ok_ty>(),
-                    err_type: std::any::TypeId::of::<#err_ty>(),
+                    ret_type: std::any::TypeId::of::<#ret_ty>(),
                 }
             }
         })
@@ -159,12 +162,8 @@ fn expand_interface(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
     let register_tokens: Vec<_> = methods
         .iter()
         .flat_map(|m| {
-            let ok_ty = &m.ok_type;
-            let err_ty = &m.err_type;
-            let mut tokens = vec![
-                quote! { <#ok_ty as ::gents::TS>::_register(manager, true); },
-                quote! { <#err_ty as ::gents::TS>::_register(manager, true); },
-            ];
+            let ret_ty = &m.ret_type;
+            let mut tokens = vec![quote! { <#ret_ty as ::gents::TS>::_register(manager, true); }];
             for p in &m.params {
                 let param_ty = &p.ty;
                 tokens.push(quote! { <#param_ty as ::gents::TS>::_register(manager, true); });
@@ -226,14 +225,21 @@ fn parse_fn_field(
     // Parse parameters
     let params = parse_params(bare_fn, rename_all)?;
 
-    // Parse return type (must be Result<T, E>)
-    let (ok_type, err_type) = parse_result_return_type(bare_fn)?;
+    // Parse return type
+    let ret_type = match &bare_fn.output {
+        syn::ReturnType::Type(_, ty) => ty.as_ref().clone(),
+        syn::ReturnType::Default => {
+            return Err(Error::new_spanned(
+                bare_fn,
+                "RPC method must have a return type",
+            ))
+        }
+    };
 
     Ok(RpcMethod {
         name,
         params,
-        ok_type,
-        err_type,
+        ret_type,
     })
 }
 
@@ -250,76 +256,33 @@ fn parse_params(bare_fn: &TypeBareFn, rename_all: Option<RenameAll>) -> Result<V
             None => format!("arg{}", idx), // fallback if no name
         };
 
+        // Check if the type is Option<T>, extract inner T and mark as optional
+        let (ty, optional) = extract_option_inner(&arg.ty);
+
         params.push(RpcParam {
             name: param_name,
-            ty: arg.ty.clone(),
+            ty,
+            optional,
         });
     }
 
     Ok(params)
 }
 
-fn parse_result_return_type(bare_fn: &TypeBareFn) -> Result<(Type, Type)> {
-    let ret_type = match &bare_fn.output {
-        syn::ReturnType::Type(_, ty) => ty.as_ref(),
-        syn::ReturnType::Default => {
-            return Err(Error::new_spanned(
-                bare_fn,
-                "RPC method must have a return type: Result<T, E>",
-            ))
+/// If the type is `Option<T>`, returns `(T, true)`. Otherwise returns `(ty, false)`.
+fn extract_option_inner(ty: &Type) -> (Type, bool) {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Option" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if args.args.len() == 1 {
+                        if let syn::GenericArgument::Type(inner) = &args.args[0] {
+                            return (inner.clone(), true);
+                        }
+                    }
+                }
+            }
         }
-    };
-
-    // Extract Result<T, E>
-    let type_path = match ret_type {
-        Type::Path(p) => p,
-        _ => {
-            return Err(Error::new_spanned(
-                ret_type,
-                "return type must be Result<T, E>",
-            ))
-        }
-    };
-
-    let last_segment = type_path
-        .path
-        .segments
-        .last()
-        .ok_or_else(|| Error::new_spanned(ret_type, "invalid return type"))?;
-
-    if last_segment.ident != "Result" {
-        return Err(Error::new_spanned(
-            ret_type,
-            "return type must be Result<T, E>",
-        ));
     }
-
-    let args = match &last_segment.arguments {
-        syn::PathArguments::AngleBracketed(args) => args,
-        _ => {
-            return Err(Error::new_spanned(
-                ret_type,
-                "Result must have type parameters: Result<T, E>",
-            ))
-        }
-    };
-
-    if args.args.len() != 2 {
-        return Err(Error::new_spanned(
-            ret_type,
-            "Result must have exactly two type parameters: Result<T, E>",
-        ));
-    }
-
-    let ok_type = match &args.args[0] {
-        syn::GenericArgument::Type(t) => t.clone(),
-        _ => return Err(Error::new_spanned(&args.args[0], "expected type argument")),
-    };
-
-    let err_type = match &args.args[1] {
-        syn::GenericArgument::Type(t) => t.clone(),
-        _ => return Err(Error::new_spanned(&args.args[1], "expected type argument")),
-    };
-
-    Ok((ok_type, err_type))
+    (ty.clone(), false)
 }

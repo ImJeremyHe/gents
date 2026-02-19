@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use crate::ts_formatter::TsFormatter;
+use crate::ts_formatter::{RpcTsParam, TsFormatter};
 use crate::utils::remove_ext;
 
 // `TS` trait defines the behavior of your types when generating files.
@@ -63,12 +63,18 @@ pub struct RpcInterfaceDescriptor {
     pub methods: Vec<RpcMethodDescriptor>,
 }
 
-/// Descriptor for a single RPC method: `fn(param1: T1, param2: T2) -> Result<T, E>`
+/// Descriptor for a single RPC method parameter
+pub struct RpcParamDescriptor {
+    pub name: String,
+    pub type_id: TypeId,
+    pub optional: bool,
+}
+
+/// Descriptor for a single RPC method
 pub struct RpcMethodDescriptor {
     pub name: String,
-    pub params: Vec<(String, TypeId)>,
-    pub ok_type: TypeId,
-    pub err_type: TypeId,
+    pub params: Vec<RpcParamDescriptor>,
+    pub ret_type: TypeId,
 }
 
 #[derive(Default)]
@@ -269,8 +275,8 @@ impl DescriptorManager {
 
             // Collect all type dependencies for imports
             for m in &rpc.methods {
-                for (_, type_id) in &m.params {
-                    if let Some(&idx) = id_map.get(type_id) {
+                for p in &m.params {
+                    if let Some(&idx) = id_map.get(&p.type_id) {
                         let desc = descriptors.get(idx).unwrap();
                         if let Descriptor::BuiltinType(_) = desc {
                             continue;
@@ -282,12 +288,9 @@ impl DescriptorManager {
                         }
                     }
                 }
-                for type_id in [m.ok_type, m.err_type] {
-                    if let Some(&idx) = id_map.get(&type_id) {
-                        let desc = descriptors.get(idx).unwrap();
-                        if let Descriptor::BuiltinType(_) = desc {
-                            continue;
-                        }
+                if let Some(&idx) = id_map.get(&m.ret_type) {
+                    let desc = descriptors.get(idx).unwrap();
+                    if !matches!(desc, Descriptor::BuiltinType(_)) {
                         let import_deps = get_import_deps_idx(&descriptors, idx);
                         for dep in import_deps {
                             let (ts_name, file_name) = get_import_deps(&descriptors, dep);
@@ -300,33 +303,30 @@ impl DescriptorManager {
             fmt.start_interface(&rpc.name, "");
 
             for m in rpc.methods {
-                let params: Vec<(String, String)> = m
+                let params: Vec<RpcTsParam> = m
                     .params
                     .iter()
-                    .map(|(name, type_id)| {
+                    .map(|p| {
                         let ts_type = id_map
-                            .get(type_id)
+                            .get(&p.type_id)
                             .and_then(|idx| descriptors.get(*idx))
                             .map(|d| d.ts_name().to_string())
                             .unwrap_or_else(|| "unknown".to_string());
-                        (name.clone(), ts_type)
+                        RpcTsParam {
+                            name: p.name.clone(),
+                            ts_type,
+                            optional: p.optional,
+                        }
                     })
                     .collect();
 
-                let ok_ts = id_map
-                    .get(&m.ok_type)
+                let ret_ts = id_map
+                    .get(&m.ret_type)
                     .and_then(|idx| descriptors.get(*idx))
                     .map(|d| d.ts_name().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
 
-                let err_ts = id_map
-                    .get(&m.err_type)
-                    .and_then(|idx| descriptors.get(*idx))
-                    .map(|d| d.ts_name().to_string())
-                    .unwrap_or_else(|| "unknown".to_string());
-
-                let ret_type = format!("{} | {}", ok_ts, err_ts);
-                fmt.add_rpc_method(&m.name, params, &ret_type);
+                fmt.add_rpc_method(&m.name, params, &ret_ts);
             }
 
             fmt.end_interface();
