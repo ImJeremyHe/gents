@@ -503,6 +503,8 @@ mod test_rpc_interface {
     pub struct WorkbookMethods {
         pub get_cell: fn(row_idx: u32, col_idx: u32) -> Result<CellInfo, ErrorMessage>,
         pub save_file: fn(file_path: String) -> Result<SaveResult, ErrorMessage>,
+        pub delete: fn(id: u32) -> CellInfo,
+        pub update: fn(id: u32, value: Option<String>) -> Result<(), ErrorMessage>,
     }
 
     // With rename_all = "camelCase": converts to camelCase
@@ -510,7 +512,8 @@ mod test_rpc_interface {
     #[ts(file_name = "workbook_methods_camel.ts", rename_all = "camelCase")]
     pub struct WorkbookMethodsCamel {
         pub get_cell: fn(row_idx: u32, col_idx: u32) -> Result<CellInfo, ErrorMessage>,
-        pub save_file: fn(file_path: String) -> Result<SaveResult, ErrorMessage>,
+        pub save_file:
+            fn(file_path: String, overwrite: Option<bool>) -> Result<SaveResult, ErrorMessage>,
     }
 
     #[test]
@@ -526,12 +529,19 @@ mod test_rpc_interface {
             .collect();
 
         let content = files.get("workbook_methods.ts").unwrap();
-        // Without rename_all: keeps snake_case
+        // Multiple params, Result return
         assert!(content.contains(
             "get_cell(row_idx: number, col_idx: number): Promise<CellInfo | ErrorMessage>;"
         ));
+        // Single param, Result return
         assert!(
             content.contains("save_file(file_path: string): Promise<SaveResult | ErrorMessage>;")
+        );
+        // Non-Result return type
+        assert!(content.contains("delete(id: number): Promise<CellInfo>;"));
+        // Optional param + void ok type
+        assert!(
+            content.contains("update(id: number, value?: string): Promise<void | ErrorMessage>;")
         );
     }
 
@@ -548,13 +558,14 @@ mod test_rpc_interface {
             .collect();
 
         let content = files.get("workbook_methods_camel.ts").unwrap();
-        // With rename_all = "camelCase": converts to camelCase
+        // camelCase + Result return
         assert!(content.contains(
             "getCell(rowIdx: number, colIdx: number): Promise<CellInfo | ErrorMessage>;"
         ));
-        assert!(
-            content.contains("saveFile(filePath: string): Promise<SaveResult | ErrorMessage>;")
-        );
+        // camelCase + optional param
+        assert!(content.contains(
+            "saveFile(filePath: string, overwrite?: boolean): Promise<SaveResult | ErrorMessage>;"
+        ));
     }
 }
 

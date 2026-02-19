@@ -1,5 +1,12 @@
 use std::collections::BTreeSet;
 
+/// Resolved RPC parameter for TS generation
+pub struct RpcTsParam {
+    pub name: String,
+    pub ts_type: String,
+    pub optional: bool,
+}
+
 #[derive(Default)]
 pub struct TsFormatter {
     imports: BTreeSet<String>,
@@ -91,10 +98,16 @@ impl TsFormatter {
         ));
     }
 
-    pub fn add_rpc_method(&mut self, name: &str, params: Vec<(String, String)>, ret_type: &str) {
+    pub fn add_rpc_method(&mut self, name: &str, params: Vec<RpcTsParam>, ret_type: &str) {
         let param_str = params
             .iter()
-            .map(|(n, t)| format!("{}: {}", n, t))
+            .map(|p| {
+                if p.optional {
+                    format!("{}?: {}", p.name, p.ts_type)
+                } else {
+                    format!("{}: {}", p.name, p.ts_type)
+                }
+            })
             .collect::<Vec<_>>()
             .join(", ");
         self.write_line(&format!("{}({}): Promise<{}>;", name, param_str, ret_type));
